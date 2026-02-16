@@ -49,6 +49,8 @@ logger = logging.getLogger(__name__)
 # Log the log file location at the start
 logger.info(f"Logging to: {log_filename}")
 
+
+#FIXME: parse one text file with paths till NORMAL, then separate the CSV and FITS paths
 def argument_parser() -> argparse.Namespace:
     """
     Parse command-line arguments for the DESIRT data organization script.
@@ -58,7 +60,6 @@ def argument_parser() -> argparse.Namespace:
     parser.add_argument("--fits_path", type=str, required=True, help="Path to the text file containing list of FITS directories")
     parser.add_argument("--n_workers", type=int, default=None, help="Number of parallel workers (default: CPU count - 1)")
     parser.add_argument("--checkpoint_file", type=str, default="./checkpoint.pkl", help="Path to checkpoint file for resuming")
-    parser.add_argument("--output_file", type=str, default="./results/desirt_master_database.h5", help="Path to output HDF5 file")
 
     return parser.parse_args()
 
@@ -335,6 +336,7 @@ def get_cutouts(organized_fits_paths: dict) -> Tuple[dict, dict, dict]:
      The function first checks if all input dictionaries have the same keys (object IDs) and logs a warning if they do not. It then iterates through each object ID, combines the corresponding data from the FITS and CSV dictionaries, and includes the cutout images. The FITS photometry data is sorted by MJD before being added to the master database. Finally, it logs the number of objects in the created master database and returns it.
     """
 
+
 def create_master_database(organized_fits_data: dict, 
                             organized_csv_data: dict, 
                             science_images: dict, 
@@ -481,52 +483,56 @@ def save_master_database_to_hdf5(master_database: dict, output_file: str = './re
     
     logger.info(f"Database saved to {output_file}")
 
-
-def load_from_hdf5(input_file: str, objids: Optional[list] = None) -> dict:
+def save_master_database_to_json(master_database: dict, output_file: str = './results/desirt_master_database.json') -> None:
     """
-    Load master database from HDF5 format.
-    
+    Save master database to JSON format.
+
     Parameters:
-    - input_file: str, path to input HDF5 file
-    - objids: list or None, specific objids to load (None = load all)
-
-    Returns:
-    - master_database: dict, loaded database
+    - master_database: dict, the master database to save
+    - output_file: str, path to output JSON file
     """
-
-    master_database = {}
     
-    with h5py.File(input_file, 'r') as f:
-        objects_to_load = objids if objids else list(f.keys())
-
-        logger.info(f"Loading data for {len(objects_to_load)} objects from HDF5 file: {input_file}")
-        
-        for objid in tqdm(objects_to_load, desc="Loading objects from HDF5"):
-            if objid not in f:
-                continue
-                
-            obj_group = f[objid]
+    # Create output directory if it doesn't exist
+    output_path = Path(output_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"Saving master database to JSON file: {output_file}")
+    
+    # Convert master database to JSON-serializable format
+    json_database = {}
+    
+    for objid, data in tqdm(master_database.items(), desc="Preparing data for JSON"):
+        json_database[objid] = {
+            # Scalar metadata
+            'ra': float(data['ra']) if data['ra'] is not None else None,
+            'dec': float(data['dec']) if data['dec'] is not None else None,
+            'num_alerts': int(data.get('num_alerts')) if data.get('num_alerts') is not None else None,
             
-            master_database[objid] = {
-                'ra': obj_group.attrs.get('ra'),
-                'dec': obj_group.attrs.get('dec'),
-                'mjds': obj_group['mjds'][:] if 'mjds' in obj_group else None,
-                'filters': obj_group['filters'][:] if 'filters' in obj_group else None,
-                'mag_alt': obj_group['mag_alt'][:] if 'mag_alt' in obj_group else None,
-                'magerr_alt': obj_group['magerr_alt'][:] if 'magerr_alt' in obj_group else None,
-                'mag_fphot': obj_group['mag_fphot'][:] if 'mag_fphot' in obj_group else None,
-                'magerr_fphot': obj_group['magerr_fphot'][:] if 'magerr_fphot' in obj_group else None,
-                'science_image': obj_group['science_image'][:] if 'science_image' in obj_group else None,
-                'template_image': obj_group['template_image'][:] if 'template_image' in obj_group else None,
-                'difference_image': obj_group['difference_image'][:] if 'difference_image' in obj_group else None,
-                'dates': json.loads(obj_group.attrs.get('dates', '{}')),
-                'alert_mags': json.loads(obj_group.attrs.get('alert_mags', '{}')),
-                'alert_magerrs': json.loads(obj_group.attrs.get('alert_magerrs', '{}')),
-                'alert_filters': json.loads(obj_group.attrs.get('alert_filters', '{}'))
-            }
+            # Arrays (convert numpy arrays to lists)
+            'mjds': data['mjds'].tolist() if data.get('mjds') is not None else None,
+            'filters': data['filters'].tolist() if data.get('filters') is not None else None,
+            'mag_alt': data['mag_alt'].tolist() if data.get('mag_alt') is not None else None,
+            'magerr_alt': data['magerr_alt'].tolist() if data.get('magerr_alt') is not None else None,
+            'mag_fphot': data['mag_fphot'].tolist() if data.get('mag_fphot') is not None else None,
+            'magerr_fphot': data['magerr_fphot'].tolist() if data.get('magerr_fphot') is not None else None,
+            
+            # Images (convert numpy arrays to lists)
+            'science_image': data['science_image'].tolist() if data.get('science_image') is not None else None,
+            'template_image': data['template_image'].tolist() if data.get('template_image') is not None else None,
+            'difference_image': data['difference_image'].tolist() if data.get('difference_image') is not None else None,
+            
+            # Nested dictionaries (already JSON-compatible)
+            'dates': data.get('dates'),
+            'alert_mags': data.get('alert_mags'),
+            'alert_magerrs': data.get('alert_magerrs'),
+            'alert_filters': data.get('alert_filters')
+        }
     
-    logger.info(f"Loaded master database with {len(master_database)} objects from {input_file}")
-    return master_database
+    # Write to JSON file
+    with open(output_file, 'w') as f:
+        json.dump(json_database, f, indent=2)
+    
+    logger.info(f"Database saved to {output_file}")
 
 
 def main():
@@ -573,7 +579,8 @@ def main():
     logger.info("="*60)
     master_database = create_master_database(organized_fits_data, organized_csv_data, 
                                              science_images, template_images, difference_images)
-    save_master_database_to_hdf5(master_database, output_file=args.output_file)
+    save_master_database_to_hdf5(master_database, output_file=f'./results/desirt_master_database_{time.now()}.h5')
+    save_master_database_to_json(master_database, output_file=f'./results/desirt_master_database_{time.now()}.json')
     
     logger.info("="*60)
     logger.info("PIPELINE COMPLETED SUCCESSFULLY!")
