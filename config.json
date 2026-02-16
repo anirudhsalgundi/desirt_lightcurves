@@ -1,0 +1,14 @@
+{
+    "filter_colors": {
+        "g": "green",
+        "r": "red",
+        "i": "orange",
+        "z": "purple",
+        "u": "blue",
+        "Y": "brown",
+        "B": "blue",
+        "V": "green",
+        "R": "red",
+        "I": "orange"
+    }
+}
