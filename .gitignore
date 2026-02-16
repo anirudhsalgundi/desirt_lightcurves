@@ -12,6 +12,10 @@ wheels/
 
 uv.lock
 *log
+data/*txt
+
+
+slurm*out
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
