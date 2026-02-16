@@ -16,6 +16,8 @@ data/*txt
 
 
 slurm*out
+results/*h5
+results/*json
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
