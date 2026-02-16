@@ -28,25 +28,21 @@ from datetime import datetime
 LOGSDIR = Path("./logs")
 LOGSDIR.mkdir(exist_ok=True)
 
-def make_logs(LOGSDIR):
-    log_filename = LOGSDIR / f"log_from_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+log_filename = LOGSDIR / f"log_from_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
-    # Configure logging to both file and console
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_filename),  # Write to file
-            logging.StreamHandler()              # Print to console
-        ]
-    )
-    logger = logging.getLogger(__name__)
+# Configure logging to both file and console
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_filename),  # Write to file
+        logging.StreamHandler()              # Print to console
+    ]
+)
+logger = logging.getLogger(__name__)
 
-    # Log the log file location at the start
-    logger.info(f"Logging to: {log_filename}")
-
-    return logger
-
+# Log the log file location at the start
+logger.info(f"Logging to: {log_filename}")
 
 def argument_parser() -> argparse.Namespace:
 
@@ -80,6 +76,27 @@ def merge_csvs(file_with_path_to_csvs) -> pl.DataFrame:
         merged_csv = pl.concat([pl.read_csv(f, infer_schema_length=10000) for f in summary_csv_paths], how="diagonal") 
 
     return merged_csv
+
+
+def group_csv_data_by_objid(merged_csv) -> dict:
+    """
+    Group the merged CSV data by object ID (objid).
+    ------------
+    Parameters:
+    - merged_csv: pl.DataFrame, the merged Polars DataFrame containing all the CSV data.
+
+    Returns:
+    - grouped_data: dict, a dictionary where each key is an objid and the value is another dictionary containing the grouped data for that objid.
+    """
+
+    grouped_data = defaultdict(dict)
+
+    for row in merged_csv.iter_rows(named=True):
+        objid = row["objid"]
+        grouped_data[objid].update(row)
+
+    logger.info(f"Grouped CSV data by objid")
+    return grouped_data
 
 
 def get_unique_objids(organised_csv_data) -> list:
@@ -191,8 +208,7 @@ def organize_fits_data(organised_fits_paths) -> dict:
         all_magerr_fphot = []
         
         # Loop through all FITS files for this object
-        logger.info(f"Processing FITS files for objid: {objid} with {len(fits_files_list)} files")
-        for fits_file in tqdm(fits_files_list, desc="Reading FITS files"):
+        for fits_file in fits_files_list:
             try:
                 with fits.open(fits_file) as hdul:
                     # Check if extension 1 exists and has data
@@ -432,6 +448,7 @@ def save_master_database_to_hdf5(master_database, output_file='./results/desirt_
     
     logger.info(f"Database saved to {output_file}")
 
+
 def load_from_hdf5(input_file, objids=None) -> dict:
 
     """
@@ -485,12 +502,6 @@ def main():
     """
     Main function to orchestrate the organization of DESIRT data from CSV and FITS files and create a master database.
     """
-
-    print("\nStarting DESIRT data organization pipeline...")
-    
-    logger = make_logs(LOGSDIR)
-
-    print("\nParsing command-line arguments...")
 
     args = argument_parser()
     
