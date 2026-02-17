@@ -196,11 +196,16 @@ def _read_fits_file_data(fits_file: str) -> Optional[dict]:
             # Check required columns
             if not all(col in data.dtype.names for col in REQUIRED_FITS_COLS):
                 return None
-            
+
+            # Convert filters to byte strings for HDF5 compatibility
+            filters = np.array(data['FILTER'])
+            if filters.dtype.kind == 'U':  # Unicode string
+                filters = filters.astype('S')  # Convert to byte string
+                        
             return {
                 'objid': objid,
                 'mjds': np.array(data['MJD_OBS']),
-                'filters': np.array(data['FILTER']),
+                'filters': filters,
                 'mag_alt': np.array(data['MAG_ALT']),
                 'magerr_alt': np.array(data['MAGERR_ALT']),
                 'mag_fphot': np.array(data['MAG_FPHOT']),
