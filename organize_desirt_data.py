@@ -163,6 +163,9 @@ def read_all_fits_files_to_temp(paths_to_all_fits_files: str,
                 else:
                     # Create new group
                     grp = f.create_group(objid)
+                    # Store RA/DEC as attributes (scalar values per object)
+                    grp.attrs['ra'] = float(result['ra'])
+                    grp.attrs['dec'] = float(result['dec'])
                     for key in ['mjds', 'filters', 'mag_alt', 'magerr_alt', 'mag_fphot', 'magerr_fphot', 'cutout_science', 'cutout_template', 'cutout_difference']:
                         grp.create_dataset(key, data=result[key], compression='gzip')
     
@@ -192,6 +195,7 @@ def _read_fits_file_data(fits_file: str) -> Optional[dict]:
                 return None
             
             data = hdul[1].data
+            header = hdul[1].header
             
             # Check required columns
             if not all(col in data.dtype.names for col in REQUIRED_FITS_COLS):
@@ -204,6 +208,8 @@ def _read_fits_file_data(fits_file: str) -> Optional[dict]:
                         
             return {
                 'objid': objid,
+                'ra': np.array(header['RA_OBJ']),
+                'dec': np.array(header['DEC_OBJ']),
                 'mjds': np.array(data['MJD_OBS']),
                 'filters': filters,
                 'mag_alt': np.array(data['MAG_ALT']),
@@ -258,7 +264,11 @@ def main():
                 grp_in = f_in[objid]
                 grp_out = f_out.create_group(objid)
                 
-                # Load data
+                # Load RA/DEC from attributes
+                ra = grp_in.attrs['ra']
+                dec = grp_in.attrs['dec']
+                
+                # Load time-series data
                 mjds = grp_in['mjds'][:]
                 filters = grp_in['filters'][:]
                 mag_alt = grp_in['mag_alt'][:]
@@ -271,6 +281,10 @@ def main():
                 
                 # Sort by MJD
                 sort_idx = np.argsort(mjds)
+                
+                # Save RA/DEC as attributes in final file
+                grp_out.attrs['ra'] = ra
+                grp_out.attrs['dec'] = dec
                 
                 # Save sorted data to final file
                 grp_out.create_dataset('mjds', data=mjds[sort_idx], compression='gzip')
