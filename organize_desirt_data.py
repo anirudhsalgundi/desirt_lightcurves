@@ -21,7 +21,7 @@ from astropy.time import Time
 from astropy.coordinates import SkyCoord
 from astropy.table import vstack
 import astropy.units as u
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple, List, Optional, Union
 
 import logging
 
@@ -55,165 +55,148 @@ def argument_parser() -> argparse.Namespace:
     Parse command-line arguments for the DESIRT data organization script.
     """
     parser = argparse.ArgumentParser(description="Organize DESIRT data from CSV and FITS files and create a database")
-    parser.add_argument("--csv_path", type=str, required=True, help="Path to the CSV file containing list of summary CSVs")
-    parser.add_argument("--fits_path", type=str, required=True, help="Path to the text file containing list of FITS directories")
+    parser.add_argument("--data", type=str, required=True, help="Path to the text file containing list of FITS directories")
     parser.add_argument("--n_workers", type=int, default=None, help="Number of parallel workers (default: CPU count - 1)")
+    parser.add_argument("--batch_size", type=int, default=1000, required=False, help="Number of FITS files to process in each batch. Default is 1000.")
 
     return parser.parse_args()
 
 
-def merge_csvs(file_with_path_to_csvs) -> pl.DataFrame:
+def extract_objid_from_fits_path(fits_path: str) -> Optional[str]:
     """
-    Read multiple CSV files listed in a text file, merge them into a single Polars DataFrame, and return it.
-    --------
-    Parameters:
-    - file_with_path_to_csvs: str, path to a text file where each line is a path to a CSV file to be merged.
-     Returns:
-    - merged_csv: pl.DataFrame, a Polars DataFrame containing the merged data from all the CSV files.
-     Note: The function uses Polars for efficient CSV reading and merging. It reads each CSV file with an increased infer_schema_length to ensure correct data types are inferred, especially for larger datasets. The merged DataFrame is created using a diagonal concatenation to handle potential differences in columns across the CSV files.
+    Extract objid from FITS filename.
+    Example: 3_T202504071346367m032044.fits -> T202504071346367m032044
     """
-
-    with open(file_with_path_to_csvs, 'r') as f:
-        summary_csv_paths = [line.strip() for line in f.readlines()]
-
-
-        # ################# TESTING ONLY: LIMIT TO FIRST FILE #################
-        # summary_csv_paths = summary_csv_paths[:1]  # Limit to first file for testing
-
-        logger.info(f"Read {len(summary_csv_paths)} CSV files")
-        merged_csv = pl.concat([pl.read_csv(f, infer_schema_length=INFER_SCHEMA_LENGTH) for f in summary_csv_paths], how="diagonal") 
-
-    return merged_csv
+    filename = Path(fits_path).name
+    # Match pattern: N_objid.fits where N is a number
+    match = re.match(r'^\d+_([A-Z]\d+[mp]\d+)\.fits$', filename)
+    if match:
+        return match.group(1)
+    return None
 
 
-def group_csv_data_by_objid(merged_csv) -> dict:
+def get_unique_objids(paths_to_all_fits_files: str) -> list:
     """
-    Group the merged CSV data by object ID (objid) and structure alert data.
+    Read FITS file paths and extract unique object IDs.
     
     Parameters:
-    - merged_csv: pl.DataFrame, the merged Polars DataFrame containing all CSV data
+    - paths_to_all_fits_files: str, path to text file with FITS paths
     
     Returns:
-    - grouped_data: dict, structured data for each objid with nested alert information
+    - list of unique objids (sorted)
     """
-    grouped_data = {}
+    unique_objids = set()
     
-    for objid_tuple, obj_data in merged_csv.group_by("objid"):
-        objid = objid_tuple[0]  # Extract string from tuple
-        
-        grouped_data[objid] = {
-            # Scalar values (take first occurrence)
-            "ra": obj_data["ra_obj"][0] if "ra_obj" in obj_data.columns else None,
-            "dec": obj_data["dec_obj"][0] if "dec_obj" in obj_data.columns else None,
-            "num_alerts": obj_data["num_alert"][0] if "num_alert" in obj_data.columns else None,
-            
-            # Nested alert data (all alerts for this object)
-            "dates": {
-                "first": obj_data["date_first_alert"].to_list() if "date_first_alert" in obj_data.columns else None,
-                "peak": obj_data["date_peak_alert"].to_list() if "date_peak_alert" in obj_data.columns else None,
-                "last": obj_data["date_last_alert"].to_list() if "date_last_alert" in obj_data.columns else None
-            },
-            "mags": {
-                "first": obj_data["mag_first_alert"].to_list() if "mag_first_alert" in obj_data.columns else None,
-                "peak": obj_data["mag_peak_alert"].to_list() if "mag_peak_alert" in obj_data.columns else None,
-                "last": obj_data["mag_last_alert"].to_list() if "mag_last_alert" in obj_data.columns else None
-            },
-            "magerrs": {
-                "first": obj_data["magerr_first_alert"].to_list() if "magerr_first_alert" in obj_data.columns else None,
-                "peak": obj_data["magerr_peak_alert"].to_list() if "magerr_peak_alert" in obj_data.columns else None,
-                "last": obj_data["magerr_last_alert"].to_list() if "magerr_last_alert" in obj_data.columns else None
-            },
-            "filters": {
-                "first": obj_data["filter_first_alert"].to_list() if "filter_first_alert" in obj_data.columns else None,
-                "peak": obj_data["filter_peak_alert"].to_list() if "filter_peak_alert" in obj_data.columns else None,
-                "last": obj_data["filter_last_alert"].to_list() if "filter_last_alert" in obj_data.columns else None
-            }
-        }
-
-    logger.info(f"Grouped CSV data for {len(grouped_data)} unique objids")
-    return grouped_data
-
-
-def get_unique_objids(organised_csv_data: dict) -> list:
-
-    """
-    Get a list of unique object IDs (objids) from the organized CSV data.
-    ------------
-    Parameters:
-    - organised_csv_data: dict, a dictionary where each key is an objid and the value is another dictionary containing the grouped data for that objid.
-    Returns:
-    - unique_objids: list, a list of unique object IDs extracted from the organized CSV data.
-
-    The function simply extracts the keys from the organized CSV data dictionary, which represent the unique object IDs (objids), and returns them as a list. It also includes logging to indicate that the extraction of unique objids is taking place.
-    """
-
-    logger.info(f"Extracting unique objids from organized CSV data")
-    return list(organised_csv_data.keys()) 
-
-
-def organize_fits_path_by_objid(unique_objects: list, paths_to_all_fits_files: str) -> dict:
-
-    """
-    Organize FITS file paths by object ID (objid).
-    ------------
-    Parameters:
-    - unique_objects: list, a list of unique object IDs (objids) for which we want to organize the FITS file paths.
-
-    Returns:
-    - organised_fits_paths: dict, a dictionary where each key is an objid and the value is a list of paths to FITS files that contain that objid in their filename. 
-    
-    The function iterates through each unique object ID and filters the list of all FITS file paths to find those that contain the object ID in their filename. It uses tqdm to provide a progress bar for the organization process. Only object IDs that have corresponding FITS files will be included in the returned dictionary.
-    """
-
     with open(paths_to_all_fits_files, 'r') as f:
-        paths_to_all_fits_files = [line.strip() for line in f.readlines()]
-
-
-    # ################## TESTING ONLY: LIMIT TO FIRST 1000 FILES #################
-    # paths_to_all_fits_files = paths_to_all_fits_files[:1000]  # Limit to first 1000 files for testing
-
-    organized_fits_paths = defaultdict(list)
-    unique_objects_set = set(unique_objects)  # O(1) lookup
+        for line in f:
+            fits_path = line.strip()
+            if fits_path:
+                objid = extract_objid_from_fits_path(fits_path)
+                if objid:
+                    unique_objids.add(objid)
     
-    logger.info(f"Organizing FITS paths for {len(unique_objects)} objects")
-    
-    for fits_file in tqdm(paths_to_all_fits_files, desc="Organizing FITS paths by objid"):
-        filename = Path(fits_file).name
-        # Find which objid this file belongs to
-        for objid in unique_objects_set:
-            if objid in filename:
-                organized_fits_paths[objid].append(fits_file)
-                break  # Assumes each file belongs to only one objid
-
-    logger.info(f"Organized FITS paths for {len(organized_fits_paths)} unique objects")
-    return dict(organized_fits_paths)
+    # Return sorted list for reproducibility
+    return sorted(unique_objids)
 
 
-def _read_single_fits_file(args: tuple) -> Optional[dict]:
+def read_all_fits_files_to_temp(paths_to_all_fits_files: str, 
+                                 temp_file: str = "temp_fits_data.h5",
+                                 batch_size: int = 1000,
+                                 n_workers: Optional[int] = None) -> str:
     """
-    Worker function to read a single FITS file. Designed for parallel processing.
+    Read all FITS files and write to temporary HDF5 file to save memory.
     
     Parameters:
-    - args: tuple of (fits_file, objid, required_cols)
+    - paths_to_all_fits_files: str, path to text file with FITS paths
+    - temp_file: str, path to temporary HDF5 file
+    - n_workers: int, number of parallel workers
+    
+    Returns:
+    - temp_file: str, path to temporary file containing all FITS data
+    """
+    
+    if n_workers is None:
+        n_workers = max(1, cpu_count() - 1)
+    
+    # Read file list
+    with open(paths_to_all_fits_files, 'r') as f:
+        fits_files = [line.strip() for line in f if line.strip()]
+    
+    logger.info(f"Reading {len(fits_files)} FITS files with {n_workers} workers")
+    logger.info(f"Writing to temporary file: {temp_file}")
+    
+    # Create/overwrite temp HDF5 file
+    with h5py.File(temp_file, 'w') as f:
+        pass  # Just create empty file
+    
+    # Process in batches to control memory
+    batch_size = int(batch_size)
+    num_batches = (len(fits_files) + batch_size - 1) // batch_size
+    
+    for batch_idx in range(num_batches):
+        logger.info(f"Processing batch {batch_idx + 1}/{num_batches} (files {batch_idx * batch_size} to {min((batch_idx + 1) * batch_size, len(fits_files)) - 1})")
+        start_idx = batch_idx * batch_size
+        end_idx = min((batch_idx + 1) * batch_size, len(fits_files))
+        batch_files = fits_files[start_idx:end_idx]
+        
+        # Read batch in parallel
+        with Pool(n_workers) as pool:
+            results = pool.map(_read_fits_file_data, batch_files, chunksize=10)
+        
+        # Write batch to temp file
+        with h5py.File(temp_file, 'a') as f:
+            for result in tqdm(results, desc=f"Processing fits files in batch {batch_idx + 1}/{num_batches}"):
+                if result is None:
+                    continue
+                
+                objid = result['objid']
+                
+                # Create or append to objid group
+                if objid in f:
+                    # Append to existing group
+                    grp = f[objid]
+                    for key in ['mjds', 'filters', 'mag_alt', 'magerr_alt', 'mag_fphot', 'magerr_fphot', 'cutout_science', 'cutout_template', 'cutout_difference']:
+                        old_data = grp[key][:]
+                        new_data = np.concatenate([old_data, result[key]])
+                        del grp[key]
+                        grp.create_dataset(key, data=new_data, compression='gzip')
+                else:
+                    # Create new group
+                    grp = f.create_group(objid)
+                    for key in ['mjds', 'filters', 'mag_alt', 'magerr_alt', 'mag_fphot', 'magerr_fphot', 'cutout_science', 'cutout_template', 'cutout_difference']:
+                        grp.create_dataset(key, data=result[key], compression='gzip')
+    
+    logger.info(f"All FITS data written to {temp_file}")
+    return temp_file
+
+
+def _read_fits_file_data(fits_file: str) -> Optional[dict]:
+    """
+    Read a single FITS file and extract objid from filename.
+    
+    Parameters:
+    - fits_file: str, path to FITS file
     
     Returns:
     - dict with objid and data, or None if reading failed
     """
-    fits_file, objid = args
+    
+    # Extract objid from filename
+    objid = extract_objid_from_fits_path(fits_file)
+    if objid is None:
+        return None
     
     try:
         with fits.open(fits_file, memmap=True) as hdul:
-            # Check if extension 1 exists and has data
             if len(hdul) < 2 or hdul[1].data is None:
                 return None
             
             data = hdul[1].data
             
-            # Check if required columns exist
+            # Check required columns
             if not all(col in data.dtype.names for col in REQUIRED_FITS_COLS):
                 return None
             
-            # Extract and return data
             return {
                 'objid': objid,
                 'mjds': np.array(data['MJD_OBS']),
@@ -221,7 +204,10 @@ def _read_single_fits_file(args: tuple) -> Optional[dict]:
                 'mag_alt': np.array(data['MAG_ALT']),
                 'magerr_alt': np.array(data['MAGERR_ALT']),
                 'mag_fphot': np.array(data['MAG_FPHOT']),
-                'magerr_fphot': np.array(data['MAGERR_FPHOT'])
+                'magerr_fphot': np.array(data['MAGERR_FPHOT']),
+                'cutout_science': np.array(data['PixA_THUMB_SCI']),
+                'cutout_template': np.array(data['PixA_THUMB_TEMP']),
+                'cutout_difference': np.array(data['PixA_THUMB_DIFF'])
             }
                 
     except Exception as e:
@@ -229,366 +215,84 @@ def _read_single_fits_file(args: tuple) -> Optional[dict]:
         return None
 
 
-def organize_fits_data(organized_fits_paths: dict, n_workers: Optional[int] = None) -> dict:
-
-    """
-    Organize FITS data by object ID (objid).
-    ------------
-    Parameters:
-    - organized_fits_paths: dict, a dictionary where each key is an objid and the value is a list of paths to FITS files that contain that objid in their filename.
-
-    Returns:
-    - organised_fits_data: dict, a dictionary where each key is an objid and the value is another dictionary containing the organized FITS data for that objid, including arrays of MJD observations, filters, magnitudes and their errors for both aperture photometry (ALT) and forced photometry (FPHOT). 
-    
-    
-    The function reads each FITS file for a given objid, extracts the relevant data, and concatenates it across all FITS files to create a comprehensive dataset for each object. It also includes error handling to skip files that cannot be read or do not contain the expected data, and logs warnings for any issues encountered during the process.
-    """
-
-    if n_workers is None:
-        n_workers = max(1, cpu_count() - 1)
-    
-    logger.info(f"Using {n_workers} parallel workers for FITS data organization")
-    
-    # Prepare tasks for parallel processing
-    tasks = []
-    for objid, fits_files_list in organized_fits_paths.items():
-        for fits_file in fits_files_list:
-            tasks.append((fits_file, objid))
-    
-    logger.info(f"Processing {len(tasks)} FITS files across {len(organized_fits_paths)} objects")
-    
-    # Process files in parallel
-    organized_fits_data = defaultdict(lambda: defaultdict(list))
-    
-    with Pool(n_workers) as pool:
-        results = list(tqdm(
-            pool.imap_unordered(_read_single_fits_file, tasks, chunksize=10),
-            total=len(tasks),
-            desc=f"Reading FITS files (parallel job with {n_workers} workers)"
-        ))
-    
-    # Aggregate results by objid
-    for result in results:
-        if result is None:
-            continue
-        
-        objid = result['objid']
-        for key in ['mjds', 'filters', 'mag_alt', 'magerr_alt', 'mag_fphot', 'magerr_fphot']:
-            organized_fits_data[objid][key].append(result[key])
-    
-    # Concatenate arrays for each object
-    final_organized_data = {}
-    for objid, data_dict in tqdm(organized_fits_data.items(), desc="Concatenating arrays"):
-        try:
-            final_organized_data[objid] = {
-                key: np.concatenate(arrays) for key, arrays in data_dict.items()
-            }
-        except Exception as e:
-            logger.error(f"Error concatenating data for {objid}: {e}")
-            continue
-
-    logger.info(f"Organized FITS data for {len(final_organized_data)} objects")
-    return final_organized_data
-
-
-def get_cutouts(organized_fits_paths: dict) -> Tuple[dict, dict, dict]:
-    """
-    Get cutout images (science, template, difference) for each object ID from the FITS files.
-    
-    Parameters:
-    - organized_fits_paths: dict, a dictionary where each key is an objid and the value is a list of FITS file paths.
-
-    Returns:
-    - Tuple of three dicts: (science_images, template_images, difference_images)
-    """
-
-    science_images, template_images, difference_images = {}, {}, {}
-
-    for objid, fits_files_list in tqdm(organized_fits_paths.items(), desc="Extracting cutout images"):
-        last_fits_file = fits_files_list[-1]
-        
-        try:
-            with fits.open(last_fits_file, memmap=True) as hdul:
-                data = hdul[1].data
-
-                science_images[objid] = np.array(data["PixA_THUMB_SCI"])
-                template_images[objid] = np.array(data["PixA_THUMB_TEMP"])
-                difference_images[objid] = np.array(data["PixA_THUMB_DIFF"])
-                    
-        except Exception as e:
-            logger.error(f"Error reading cutouts for {objid} from {last_fits_file}: {e}")
-            continue
-
-    logger.info(f"Extracted cutout images for {len(science_images)} objects")
-    return science_images, template_images, difference_images
-
-    """                        
-    Create a master database by combining organized FITS data, CSV data, and cutout images.
-    ------------
-    Parameters:
-    - organized_fits_data: dict, a dictionary where each key is an objid and the value is another dictionary containing the organized FITS data for that objid.
-    - organised_csv_data: dict, a dictionary where each key is an objid and the value is another dictionary containing the grouped CSV data for that objid.
-    - science_images: dict, a dictionary where each key is an objid and the value is the science image cutout array extracted from the FITS file.
-    - template_images: dict, a dictionary where each key is an objid and the value is the template image cutout array extracted from the FITS file.
-    - difference_images: dict, a dictionary where each key is an objid and the value is the difference image cutout array extracted from the FITS file.
-
-    Returns:
-    - master_database: dict, a dictionary where each key is an objid and the value is another dictionary containing all combined data for that objid, including CSV metadata, FITS photometry data, and cutout images.
-
-     The function first checks if all input dictionaries have the same keys (object IDs) and logs a warning if they do not. It then iterates through each object ID, combines the corresponding data from the FITS and CSV dictionaries, and includes the cutout images. The FITS photometry data is sorted by MJD before being added to the master database. Finally, it logs the number of objects in the created master database and returns it.
-    """
-
-
-def create_master_database(organized_fits_data: dict, 
-                            organized_csv_data: dict, 
-                            science_images: dict, 
-                            template_images: dict, 
-                            difference_images: dict) -> dict:
-    """                        
-    Create a master database by combining organized FITS data, CSV data, and cutout images.
-    
-    Parameters:
-    - organized_fits_data: dict, organized FITS data by objid
-    - organized_csv_data: dict, grouped CSV data by objid
-    - science_images: dict, science image cutouts by objid
-    - template_images: dict, template image cutouts by objid
-    - difference_images: dict, difference image cutouts by objid
-
-    Returns:
-    - master_database: dict, combined data for all objects
-    """
-
-    # Check if all dictionaries have the same keys (object IDs)
-    sizes = {
-        'FITS data': len(organized_fits_data),
-        'CSV data': len(organized_csv_data),
-        'Science images': len(science_images),
-        'Template images': len(template_images),
-        'Difference images': len(difference_images)
-    }
-    
-    if len(set(sizes.values())) == 1:
-        logger.info(f"Success! All dictionaries have {list(sizes.values())[0]} objects.")
-    else:
-        logger.warning("Warning: Dictionary sizes don't match!")
-        for name, size in sizes.items():
-            logger.warning(f"  {name}: {size}")
-    
-    master_database = {}
-    
-    # Combine all data for each object
-    for objid in tqdm(organized_fits_data.keys(), desc="Creating master database"):
-        # Get FITS data
-        fits_data = organized_fits_data[objid]
-        
-        # Sort by MJD
-        if fits_data.get("mjds") is not None and len(fits_data["mjds"]) > 0:
-            sort_idx = np.argsort(fits_data["mjds"])
-            
-            # Create sorted copies
-            sorted_fits_data = {
-                "mjds": fits_data["mjds"][sort_idx],
-                "filters": fits_data["filters"][sort_idx],
-                "mag_alt": fits_data["mag_alt"][sort_idx],
-                "magerr_alt": fits_data["magerr_alt"][sort_idx],
-                "mag_fphot": fits_data["mag_fphot"][sort_idx],
-                "magerr_fphot": fits_data["magerr_fphot"][sort_idx]
-            }
-        else:
-            sorted_fits_data = fits_data
-        
-        master_database[objid] = {
-            # CSV data
-            "ra": organized_csv_data.get(objid, {}).get("ra"),
-            "dec": organized_csv_data.get(objid, {}).get("dec"),
-            "num_alerts": organized_csv_data.get(objid, {}).get("num_alerts"),
-            "dates": organized_csv_data.get(objid, {}).get("dates"),
-            "alert_mags": organized_csv_data.get(objid, {}).get("mags"),
-            "alert_magerrs": organized_csv_data.get(objid, {}).get("magerrs"),
-            "alert_filters": organized_csv_data.get(objid, {}).get("filters"),
-            
-            # FITS photometry data (sorted by MJD)
-            "mjds": sorted_fits_data.get("mjds"),
-            "filters": sorted_fits_data.get("filters"),
-            "mag_alt": sorted_fits_data.get("mag_alt"),
-            "magerr_alt": sorted_fits_data.get("magerr_alt"),
-            "mag_fphot": sorted_fits_data.get("mag_fphot"),
-            "magerr_fphot": sorted_fits_data.get("magerr_fphot"),
-            
-            # Cutout images
-            "science_image": science_images.get(objid),
-            "template_image": template_images.get(objid),
-            "difference_image": difference_images.get(objid)
-        }
-    
-    logger.info(f"Master database created with {len(master_database)} objects!")
-    return master_database
-
-
-def save_master_database_to_hdf5(master_database: dict, output_file: str) -> None:
-    """
-    Save master database to HDF5 format.
-
-    Parameters:
-    - master_database: dict, the master database to save
-    - output_file: str, path to output HDF5 file
-    """
-    
-    # Create output directory if it doesn't exist
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    logger.info(f"Saving master database to HDF5 file: {output_file}")
-    
-    with h5py.File(output_file, 'w') as f:
-        for objid, data in tqdm(master_database.items(), desc="Saving to HDF5"):
-            # Create a group for each object
-            obj_group = f.create_group(objid)
-            
-            # Store scalar metadata (only if not None)
-            if data['ra'] is not None:
-                obj_group.attrs['ra'] = data['ra']
-            if data['dec'] is not None:
-                obj_group.attrs['dec'] = data['dec']
-            
-            # Store arrays
-            if data.get('mjds') is not None:
-                obj_group.create_dataset('mjds', data=data['mjds'], compression='gzip')
-            if data.get('filters') is not None:
-                # Convert Unicode strings to byte strings for HDF5 compatibility
-                filters_data = data['filters']
-                if isinstance(filters_data, np.ndarray) and filters_data.dtype.kind == 'U':
-                    filters_data = filters_data.astype('S')
-                obj_group.create_dataset('filters', data=filters_data, compression='gzip')
-            if data.get('mag_alt') is not None:
-                obj_group.create_dataset('mag_alt', data=data['mag_alt'], compression='gzip')
-            if data.get('magerr_alt') is not None:
-                obj_group.create_dataset('magerr_alt', data=data['magerr_alt'], compression='gzip')
-            if data.get('mag_fphot') is not None:
-                obj_group.create_dataset('mag_fphot', data=data['mag_fphot'], compression='gzip')
-            if data.get('magerr_fphot') is not None:
-                obj_group.create_dataset('magerr_fphot', data=data['magerr_fphot'], compression='gzip')
-            
-            # Store images
-            if data.get('science_image') is not None:
-                obj_group.create_dataset('science_image', data=data['science_image'], compression='gzip')
-            if data.get('template_image') is not None:
-                obj_group.create_dataset('template_image', data=data['template_image'], compression='gzip')
-            if data.get('difference_image') is not None:
-                obj_group.create_dataset('difference_image', data=data['difference_image'], compression='gzip')
-            
-            # Store nested dictionaries as JSON strings in attributes (only if not None)
-            if data.get('dates') is not None:
-                obj_group.attrs['dates'] = json.dumps(data['dates'])
-            if data.get('alert_mags') is not None:
-                obj_group.attrs['alert_mags'] = json.dumps(data['alert_mags'])
-            if data.get('alert_magerrs') is not None:
-                obj_group.attrs['alert_magerrs'] = json.dumps(data['alert_magerrs'])
-            if data.get('alert_filters') is not None:
-                obj_group.attrs['alert_filters'] = json.dumps(data['alert_filters'])
-    
-    logger.info(f"Database saved to {output_file}")
-
-
-def save_master_database_to_json(master_database: dict, output_file: str) -> None:
-    """
-    Save master database to JSON format.
-
-    Parameters:
-    - master_database: dict, the master database to save
-    - output_file: str, path to output JSON file
-    """
-    
-    # Create output directory if it doesn't exist
-    output_path = Path(output_file)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    logger.info(f"Saving master database to JSON file: {output_file}")
-    
-    # Convert master database to JSON-serializable format
-    json_database = {}
-    
-    for objid, data in tqdm(master_database.items(), desc="Preparing data for JSON"):
-        json_database[objid] = {
-            # Scalar metadata
-            'ra': float(data['ra']) if data['ra'] is not None else None,
-            'dec': float(data['dec']) if data['dec'] is not None else None,
-            'num_alerts': int(data.get('num_alerts')) if data.get('num_alerts') is not None else None,
-            
-            # Arrays (convert numpy arrays to lists)
-            'mjds': data['mjds'].tolist() if data.get('mjds') is not None else None,
-            'filters': data['filters'].tolist() if data.get('filters') is not None else None,
-            'mag_alt': data['mag_alt'].tolist() if data.get('mag_alt') is not None else None,
-            'magerr_alt': data['magerr_alt'].tolist() if data.get('magerr_alt') is not None else None,
-            'mag_fphot': data['mag_fphot'].tolist() if data.get('mag_fphot') is not None else None,
-            'magerr_fphot': data['magerr_fphot'].tolist() if data.get('magerr_fphot') is not None else None,
-            
-            # Images (convert numpy arrays to lists)
-            'science_image': data['science_image'].tolist() if data.get('science_image') is not None else None,
-            'template_image': data['template_image'].tolist() if data.get('template_image') is not None else None,
-            'difference_image': data['difference_image'].tolist() if data.get('difference_image') is not None else None,
-            
-            # Nested dictionaries (already JSON-compatible)
-            'dates': data.get('dates'),
-            'alert_mags': data.get('alert_mags'),
-            'alert_magerrs': data.get('alert_magerrs'),
-            'alert_filters': data.get('alert_filters')
-        }
-    
-    # Write to JSON file
-    with open(output_file, 'w') as f:
-        json.dump(json_database, f, indent=2)
-    
-    logger.info(f"Database saved to {output_file}")
-
-
 def main():
     """
-    Main function to orchestrate the organization of DESIRT data from CSV and FITS files.
+    Main function - memory-efficient version using temporary files.
     """
-
+    
     args = argument_parser()
     
     logger.info("="*60)
-    logger.info("DESIRT DATA ORGANIZATION PIPELINE STARTED (OPTIMIZED)")
+    logger.info("DESIRT DATA ORGANIZATION PIPELINE (MEMORY-EFFICIENT)")
     logger.info("="*60)
     
-    # Step 1: Process CSV data
+    # Step 1: Read all FITS files and write to temp file
     logger.info("="*60)
-    logger.info("\n[STEP 1/4] Processing CSV data...")
+    logger.info("\n[STEP 1/2] Reading FITS files to temporary storage...")
     logger.info("="*60)
-    merged_csv = merge_csvs(args.csv_path)
-    organized_csv_data = group_csv_data_by_objid(merged_csv)
-    unique_objids = get_unique_objids(organized_csv_data)
+    temp_file = "./temp_fits_data.h5"
+    read_all_fits_files_to_temp(args.data, temp_file=temp_file, batch_size = args.batch_size, n_workers=args.n_workers)
     
+    # Step 2: Load, sort, and save to final database
+    logger.info("="*60)
+    logger.info("\n[STEP 2/2] Creating final database from temporary file...")
+    logger.info("="*60)
     
-    # Step 3: Organize FITS paths and data
-    logger.info("="*60)
-    logger.info("\n[STEP 2/4] Organizing FITS data...")
-    logger.info("="*60)
-    organized_fits_paths = organize_fits_path_by_objid(unique_objids, args.fits_path)
-    organized_fits_data = organize_fits_data(organized_fits_paths, n_workers=args.n_workers)
-    
-    # Step 4: Extract cutouts
-    logger.info("="*60)
-    logger.info("\n[STEP 3/4] Extracting cutout images...")
-    logger.info("="*60)
-    science_images, template_images, difference_images = get_cutouts(organized_fits_paths)
-    
-    # Step 5: Create master database
-    logger.info("="*60)
-    logger.info("\n[STEP 4/4] Creating and saving master database...")
-    logger.info("="*60)
-    master_database = create_master_database(organized_fits_data, organized_csv_data, 
-                                             science_images, template_images, difference_images)
+    # Create output file
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    save_master_database_to_hdf5(master_database, output_file=f'./results/desirt_master_database_{timestamp}.h5')
-    save_master_database_to_json(master_database, output_file=f'./results/desirt_master_database_{timestamp}.json')
+    output_file = f'./results/desirt_master_database_{timestamp}.h5'
+    Path("./results").mkdir(exist_ok=True)
+    
+    # Read from temp and write to final (with sorting)
+    with h5py.File(temp_file, 'r') as f_in:
+        with h5py.File(output_file, 'w') as f_out:
+            objids = list(f_in.keys())
+            logger.info(f"Processing {len(objids)} unique objects")
+            
+            for objid in tqdm(objids, desc="Sorting and saving final data"):
+                grp_in = f_in[objid]
+                grp_out = f_out.create_group(objid)
+                
+                # Load data
+                mjds = grp_in['mjds'][:]
+                filters = grp_in['filters'][:]
+                mag_alt = grp_in['mag_alt'][:]
+                magerr_alt = grp_in['magerr_alt'][:]
+                mag_fphot = grp_in['mag_fphot'][:]
+                magerr_fphot = grp_in['magerr_fphot'][:]
+                cutout_science = grp_in['cutout_science'][:]
+                cutout_template = grp_in['cutout_template'][:]
+                cutout_difference = grp_in['cutout_difference'][:]
+                
+                # Sort by MJD
+                sort_idx = np.argsort(mjds)
+                
+                # Save sorted data to final file
+                grp_out.create_dataset('mjds', data=mjds[sort_idx], compression='gzip')
+                
+                # Handle filters (convert to byte strings if needed)
+                filters_sorted = filters[sort_idx]
+                if filters_sorted.dtype.kind == 'U':
+                    filters_sorted = filters_sorted.astype('S')
+                grp_out.create_dataset('filters', data=filters_sorted, compression='gzip')
+                
+                grp_out.create_dataset('mag_alt', data=mag_alt[sort_idx], compression='gzip')
+                grp_out.create_dataset('magerr_alt', data=magerr_alt[sort_idx], compression='gzip')
+                grp_out.create_dataset('mag_fphot', data=mag_fphot[sort_idx], compression='gzip')
+                grp_out.create_dataset('magerr_fphot', data=magerr_fphot[sort_idx], compression='gzip')
+                grp_out.create_dataset('science_image', data=cutout_science[sort_idx], compression='gzip')
+                grp_out.create_dataset('template_image', data=cutout_template[sort_idx], compression='gzip')
+                grp_out.create_dataset('difference_image', data=cutout_difference[sort_idx], compression='gzip')
+    
+    # Cleanup temp file
+    logger.info(f"Removing temporary file: {temp_file}")
+    Path(temp_file).unlink(missing_ok=True)
+    
     logger.info("="*60)
-    logger.info("PIPELINE COMPLETED SUCCESSFULLY!")
-    logger.info(f"Master database saved with {len(master_database)} objects")
+    logger.info("PIPELINE COMPLETED!")
+    logger.info(f"Processed {len(objids)} objects")
+    logger.info(f"Output: {output_file}")
     logger.info("="*60)
-
 
 if __name__ == "__main__":
     main()
