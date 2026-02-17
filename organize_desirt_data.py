@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 logger.info(f"Logging to: {log_filename}")
 
 
-#FIXME: parse one text file with paths till NORMAL, then separate the CSV and FITS paths
 def argument_parser() -> argparse.Namespace:
     """
     Parse command-line arguments for the DESIRT data organization script.
@@ -59,7 +58,6 @@ def argument_parser() -> argparse.Namespace:
     parser.add_argument("--csv_path", type=str, required=True, help="Path to the CSV file containing list of summary CSVs")
     parser.add_argument("--fits_path", type=str, required=True, help="Path to the text file containing list of FITS directories")
     parser.add_argument("--n_workers", type=int, default=None, help="Number of parallel workers (default: CPU count - 1)")
-    parser.add_argument("--checkpoint_file", type=str, default="./checkpoint.pkl", help="Path to checkpoint file for resuming")
 
     return parser.parse_args()
 
@@ -78,6 +76,10 @@ def merge_csvs(file_with_path_to_csvs) -> pl.DataFrame:
     with open(file_with_path_to_csvs, 'r') as f:
         summary_csv_paths = [line.strip() for line in f.readlines()]
 
+
+        # ################# TESTING ONLY: LIMIT TO FIRST FILE #################
+        # summary_csv_paths = summary_csv_paths[:1]  # Limit to first file for testing
+
         logger.info(f"Read {len(summary_csv_paths)} CSV files")
         merged_csv = pl.concat([pl.read_csv(f, infer_schema_length=INFER_SCHEMA_LENGTH) for f in summary_csv_paths], how="diagonal") 
 
@@ -86,21 +88,47 @@ def merge_csvs(file_with_path_to_csvs) -> pl.DataFrame:
 
 def group_csv_data_by_objid(merged_csv) -> dict:
     """
-    Group the merged CSV data by object ID (objid).
-    ------------
+    Group the merged CSV data by object ID (objid) and structure alert data.
+    
     Parameters:
-    - merged_csv: pl.DataFrame, the merged Polars DataFrame containing all the CSV data.
-
+    - merged_csv: pl.DataFrame, the merged Polars DataFrame containing all CSV data
+    
     Returns:
-    - grouped_data: dict, a dictionary where each key is an objid and the value is another dictionary containing the grouped data for that objid.
+    - grouped_data: dict, structured data for each objid with nested alert information
     """
-
     grouped_data = {}
-    grouped = merged_csv.group_by("objid").first()
-
-    for row in grouped.iter_rows(named=True):
-        objid = row["objid"]
-        grouped_data[objid] = dict(row)
+    
+    for objid_tuple, obj_data in merged_csv.group_by("objid"):
+        objid = objid_tuple[0]  # Extract string from tuple
+        
+        grouped_data[objid] = {
+            # Scalar values (take first occurrence)
+            "ra": obj_data["ra_obj"][0] if "ra_obj" in obj_data.columns else None,
+            "dec": obj_data["dec_obj"][0] if "dec_obj" in obj_data.columns else None,
+            "num_alerts": obj_data["num_alert"][0] if "num_alert" in obj_data.columns else None,
+            
+            # Nested alert data (all alerts for this object)
+            "dates": {
+                "first": obj_data["date_first_alert"].to_list() if "date_first_alert" in obj_data.columns else None,
+                "peak": obj_data["date_peak_alert"].to_list() if "date_peak_alert" in obj_data.columns else None,
+                "last": obj_data["date_last_alert"].to_list() if "date_last_alert" in obj_data.columns else None
+            },
+            "mags": {
+                "first": obj_data["mag_first_alert"].to_list() if "mag_first_alert" in obj_data.columns else None,
+                "peak": obj_data["mag_peak_alert"].to_list() if "mag_peak_alert" in obj_data.columns else None,
+                "last": obj_data["mag_last_alert"].to_list() if "mag_last_alert" in obj_data.columns else None
+            },
+            "magerrs": {
+                "first": obj_data["magerr_first_alert"].to_list() if "magerr_first_alert" in obj_data.columns else None,
+                "peak": obj_data["magerr_peak_alert"].to_list() if "magerr_peak_alert" in obj_data.columns else None,
+                "last": obj_data["magerr_last_alert"].to_list() if "magerr_last_alert" in obj_data.columns else None
+            },
+            "filters": {
+                "first": obj_data["filter_first_alert"].to_list() if "filter_first_alert" in obj_data.columns else None,
+                "peak": obj_data["filter_peak_alert"].to_list() if "filter_peak_alert" in obj_data.columns else None,
+                "last": obj_data["filter_last_alert"].to_list() if "filter_last_alert" in obj_data.columns else None
+            }
+        }
 
     logger.info(f"Grouped CSV data for {len(grouped_data)} unique objids")
     return grouped_data
@@ -123,40 +151,7 @@ def get_unique_objids(organised_csv_data: dict) -> list:
     return list(organised_csv_data.keys()) 
 
 
-def list_all_fits_files(file_with_path_to_fits_files: str) -> list:
-
-    """
-    List all FITS files from the directories specified in a text file.
-    ------------
-    Parameters:
-    - file_with_path_to_fits_files: str, path to a text file where each line is a path to a directory containing FITS files. 
-
-    The function will read this file, iterate through each directory, and collect the paths of all FITS files found in those directories. It returns a list of paths to all the FITS files. The function also includes logging to indicate how many FITS files were found in total and prints a warning if any specified directory is not found.
-
-    Returns:
-    - paths_to_all_fits_files: list, a list of strings where each string is the path to a FITS file found in the specified directories.
-
-    """
-
-    paths_to_all_fits_files = []
-    
-    logger.info(f"Listing all FITS files from specified directories")
-    with open(file_with_path_to_fits_files, 'r') as f:
-        candidate_dirs = [line.strip() for line in f.readlines()]
-    
-    for cand_dir in tqdm(candidate_dirs, desc="Listing FITS files"):
-        cand_path = Path(cand_dir)
-        if cand_path.exists():
-            fits_files = list(cand_path.glob("*.fits"))
-            paths_to_all_fits_files.extend([str(f) for f in fits_files])  # Convert to strings
-        else:
-            logger.warning(f"Directory not found: {cand_path}")
-    
-    logger.info(f"Found {len(paths_to_all_fits_files)} fits files in total!!")
-    return paths_to_all_fits_files
-
-
-def organize_fits_path_by_objid(unique_objects: list, paths_to_all_fits_files: list) -> dict:
+def organize_fits_path_by_objid(unique_objects: list, paths_to_all_fits_files: str) -> dict:
 
     """
     Organize FITS file paths by object ID (objid).
@@ -169,6 +164,13 @@ def organize_fits_path_by_objid(unique_objects: list, paths_to_all_fits_files: l
     
     The function iterates through each unique object ID and filters the list of all FITS file paths to find those that contain the object ID in their filename. It uses tqdm to provide a progress bar for the organization process. Only object IDs that have corresponding FITS files will be included in the returned dictionary.
     """
+
+    with open(paths_to_all_fits_files, 'r') as f:
+        paths_to_all_fits_files = [line.strip() for line in f.readlines()]
+
+
+    # ################## TESTING ONLY: LIMIT TO FIRST 1000 FILES #################
+    # paths_to_all_fits_files = paths_to_all_fits_files[:1000]  # Limit to first 1000 files for testing
 
     organized_fits_paths = defaultdict(list)
     unique_objects_set = set(unique_objects)  # O(1) lookup
@@ -423,7 +425,7 @@ def create_master_database(organized_fits_data: dict,
     return master_database
 
 
-def save_master_database_to_hdf5(master_database: dict, output_file: str = './results/desirt_master_database.h5') -> None:
+def save_master_database_to_hdf5(master_database: dict, output_file: str) -> None:
     """
     Save master database to HDF5 format.
 
@@ -453,7 +455,11 @@ def save_master_database_to_hdf5(master_database: dict, output_file: str = './re
             if data.get('mjds') is not None:
                 obj_group.create_dataset('mjds', data=data['mjds'], compression='gzip')
             if data.get('filters') is not None:
-                obj_group.create_dataset('filters', data=data['filters'], compression='gzip')
+                # Convert Unicode strings to byte strings for HDF5 compatibility
+                filters_data = data['filters']
+                if isinstance(filters_data, np.ndarray) and filters_data.dtype.kind == 'U':
+                    filters_data = filters_data.astype('S')
+                obj_group.create_dataset('filters', data=filters_data, compression='gzip')
             if data.get('mag_alt') is not None:
                 obj_group.create_dataset('mag_alt', data=data['mag_alt'], compression='gzip')
             if data.get('magerr_alt') is not None:
@@ -483,7 +489,8 @@ def save_master_database_to_hdf5(master_database: dict, output_file: str = './re
     
     logger.info(f"Database saved to {output_file}")
 
-def save_master_database_to_json(master_database: dict, output_file: str = './results/desirt_master_database.json') -> None:
+
+def save_master_database_to_json(master_database: dict, output_file: str) -> None:
     """
     Save master database to JSON format.
 
@@ -548,40 +555,35 @@ def main():
     
     # Step 1: Process CSV data
     logger.info("="*60)
-    logger.info("\n[STEP 1/5] Processing CSV data...")
+    logger.info("\n[STEP 1/4] Processing CSV data...")
     logger.info("="*60)
     merged_csv = merge_csvs(args.csv_path)
     organized_csv_data = group_csv_data_by_objid(merged_csv)
     unique_objids = get_unique_objids(organized_csv_data)
     
-    # Step 2: List FITS files
-    logger.info("="*60)
-    logger.info("\n[STEP 2/5] Listing FITS files...")
-    logger.info("="*60)
-    paths_to_all_fits_files = list_all_fits_files(args.fits_path)
     
     # Step 3: Organize FITS paths and data
     logger.info("="*60)
-    logger.info("\n[STEP 3/5] Organizing FITS data...")
+    logger.info("\n[STEP 2/4] Organizing FITS data...")
     logger.info("="*60)
-    organized_fits_paths = organize_fits_path_by_objid(unique_objids, paths_to_all_fits_files)
+    organized_fits_paths = organize_fits_path_by_objid(unique_objids, args.fits_path)
     organized_fits_data = organize_fits_data(organized_fits_paths, n_workers=args.n_workers)
     
     # Step 4: Extract cutouts
     logger.info("="*60)
-    logger.info("\n[STEP 4/5] Extracting cutout images...")
+    logger.info("\n[STEP 3/4] Extracting cutout images...")
     logger.info("="*60)
     science_images, template_images, difference_images = get_cutouts(organized_fits_paths)
     
     # Step 5: Create master database
     logger.info("="*60)
-    logger.info("\n[STEP 5/5] Creating and saving master database...")
+    logger.info("\n[STEP 4/4] Creating and saving master database...")
     logger.info("="*60)
     master_database = create_master_database(organized_fits_data, organized_csv_data, 
                                              science_images, template_images, difference_images)
-    save_master_database_to_hdf5(master_database, output_file=f'./results/desirt_master_database_{time.now()}.h5')
-    save_master_database_to_json(master_database, output_file=f'./results/desirt_master_database_{time.now()}.json')
-    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    save_master_database_to_hdf5(master_database, output_file=f'./results/desirt_master_database_{timestamp}.h5')
+    save_master_database_to_json(master_database, output_file=f'./results/desirt_master_database_{timestamp}.json')
     logger.info("="*60)
     logger.info("PIPELINE COMPLETED SUCCESSFULLY!")
     logger.info(f"Master database saved with {len(master_database)} objects")
