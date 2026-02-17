@@ -17,7 +17,6 @@ data/*txt
 
 slurm*out
 results/*h5
-results/*json
 logs/*out
 logs/*err
 
