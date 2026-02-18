@@ -3,23 +3,19 @@ flowchart TD
     A([📦 DECam FITS Files / CSVs]) --> B
 
     subgraph SETUP ["Stage 0 — One-time Setup"]
-        B["00_organize_data.py\nOrganise raw DECam data\ninto structured format"]
+        B["00_organize_data.py | Organise raw DECam data into structured format"]
     end
 
-    B --> C[(desirt_database.h5)]
+    B --> C[(desirt_database.h5\nra, dec, mjds, filters\nmag_fphot, mag_alt\nscience/diff/template images)]
 
     subgraph PIPELINE ["Main Pipeline"]
-        direction TD
-        C --> D["01_crossmatch_ztf.py\nCross-match sources\nagainst ZTF alerts"]
+        C --> D["01_crossmatch_ztf.py | Cross-match sources against ZTF alerts"]
         D --> E[(master_database.h5)]
-
-        E --> F["02_plot_lightcurves.py\nGenerate lightcurve\n& cutout plots"]
-        E --> G["03_filter_candidates.py\nFilter sources by\nscience criteria ⚙️"]
-
+        E --> F["02_plot_lightcurves.py | Generate lightcurve and cutout plots"]
+        E --> G["03_filter_candidates.py | Filter sources by science criteria ⚙️"]
         G --> H[(candidate_subset.h5)]
-
-        F --> I
-        H --> I["04_create_summary.py\nAggregate results into\nHTML summary report"]
+        F --> I["04_create_summary.py | Aggregate results into HTML summary report"]
+        H --> I
     end
 
     I --> J([🌐 summary.html])
@@ -37,9 +33,10 @@ flowchart TD
 
 
 
-
-sample h5 data looks like this:
-
+<details>
+<summary> HDF5 Database Schema</summary>
+A sample HDF5 file structure for a single source in the DESIRT master database is shown below. Each source is stored as a group named by its coordinates (e.g., `/A202502031447311m004707`), containing attributes for RA and Dec, and datasets for lightcurve data and image cutouts.
+```bash
 [salgundi@bridges2-login014 results]$ h5dump -A -g /A202502031447311m004707 desirt_master_database_20260217_184644.h5
 HDF5 "desirt_master_database_20260217_184644.h5" {
 GROUP "/A202502031447311m004707" {
@@ -100,3 +97,5 @@ GROUP "/A202502031447311m004707" {
    }
 }
 }
+```
+</details>
