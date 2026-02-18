@@ -1,6 +1,6 @@
 ## Pipeline
 
-![Pipeline Diagram](pipeline_diagram.png)
+![Pipeline Diagram](./docs/flow_chart.png)
 
 <details>
 <summary> HDF5 Database Schema</summary>
