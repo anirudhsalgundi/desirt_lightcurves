@@ -1,3 +1,46 @@
+flowchart TD
+    %% Node Definitions
+    Raw([📦 DECam Raw Data]):::input
+    Setup[00_organize_data.py]:::script
+    DB1[(desirt_database.h5)]:::database
+    
+    Cross[01_crossmatch_ztf.py]:::script
+    DB2[(master_database.h5)]:::database
+    
+    Plot[02_plot_lightcurves.py]:::script
+    Filter[03_filter_candidates.py]:::filter
+    DB3[(candidate_subset.h5)]:::database
+    
+    Report[04_create_summary.py]:::script
+    Final([🌐 summary.html]):::output
+
+    %% Flow
+    Raw --> Setup
+    Setup --> DB1
+    
+    subgraph Pipeline [Main Processing Pipeline]
+        direction TB
+        DB1 --> Cross
+        Cross --> DB2
+        DB2 --> Plot
+        DB2 --> Filter
+        Filter --> DB3
+    end
+
+    Plot --> Report
+    DB3 --> Report
+    Report --> Final
+
+    %% Aesthetic Styling
+    classDef script fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#333
+    classDef database fill:#e1f5fe,stroke:#01579b,stroke-width:1px,color:#01579b
+    classDef filter fill:#fff3e0,stroke:#e65100,stroke-width:1px,color:#e65100
+    classDef input fill:#eceff1,stroke:#455a64,stroke-width:2px
+    classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,stroke-dasharray: 5 5
+    
+    style Pipeline fill:#fcfcfc,stroke:#ddd,stroke-dasharray: 5 5,color:#999
+
+
 ```mermaid
 flowchart TD
     A([📦 DECam FITS Files / CSVs]) --> B
