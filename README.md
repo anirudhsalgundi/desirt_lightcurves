@@ -1,23 +1,35 @@
 ```mermaid
+
 flowchart TD
+
     A([DECam FITS / CSVs]) --> B
 
     subgraph S0 ["  Stage 0 · One-time Setup  "]
+
         B["00_organize_data.py · Organise raw DECam data"]
+
     end
 
     B --> C[("desirt_database.h5\nra · dec · mjds · filters · images")]
 
     subgraph S1 ["  Pipeline · Stages 1–4  "]
+
         C --> D["01_crossmatch_ztf.py · Cross-match against ZTF alerts"]
+
         D --> E[("master_database.h5")]
+
         E --> F["02_plot_lightcurves.py · Lightcurve & cutout plots"]
+
         E --> G["03_filter_candidates.py · Filter by science criteria ⚙ coming soon"]
+
         G --> H[("candidate_subset.h5")]
+
         F & H --> I["04_create_summary.py · HTML summary report"]
+
     end
 
     I --> J([summary.html])
+
 ```
 
 <details>
