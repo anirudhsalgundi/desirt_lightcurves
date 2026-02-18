@@ -1,3 +1,4 @@
+```mermaid
 flowchart TD
     %% Node Definitions
     Raw([📦 DECam Raw Data]):::input
@@ -39,7 +40,7 @@ flowchart TD
     classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,stroke-dasharray: 5 5
     
     style Pipeline fill:#fcfcfc,stroke:#ddd,stroke-dasharray: 5 5,color:#999
-
+```
 
 ```mermaid
 flowchart TD
