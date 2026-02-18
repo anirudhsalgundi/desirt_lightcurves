@@ -1,37 +1,23 @@
 ```mermaid
 flowchart TD
-    A([DECam FITS Files / CSVs]) --> B
+    A([DECam FITS / CSVs]) --> B
 
-    subgraph SETUP ["⬡  Stage 0 · One-time Setup"]
-        B["00_organize_data.py\nOrganise raw DECam data"]
+    subgraph S0 ["  Stage 0 · One-time Setup  "]
+        B["00_organize_data.py · Organise raw DECam data"]
     end
 
-    B --> C[(desirt_database.h5)]
+    B --> C[("desirt_database.h5\nra · dec · mjds · filters · images")]
 
-    subgraph PIPELINE ["⬡  Pipeline · Stages 1 – 4"]
-        C --> D["01_crossmatch_ztf.py\nCross-match against ZTF alerts"]
-        D --> E[(master_database.h5)]
-        E --> F["02_plot_lightcurves.py\nLightcurve & cutout plots"]
-        E --> G["03_filter_candidates.py\nFilter by science criteria"]
-        G --> H[(candidate_subset.h5)]
-        F --> I["04_create_summary.py\nHTML summary report"]
-        H --> I
+    subgraph S1 ["  Pipeline · Stages 1–4  "]
+        C --> D["01_crossmatch_ztf.py · Cross-match against ZTF alerts"]
+        D --> E[("master_database.h5")]
+        E --> F["02_plot_lightcurves.py · Lightcurve & cutout plots"]
+        E --> G["03_filter_candidates.py · Filter by science criteria ⚙ coming soon"]
+        G --> H[("candidate_subset.h5")]
+        F & H --> I["04_create_summary.py · HTML summary report"]
     end
 
     I --> J([summary.html])
-
-    style SETUP fill:#f8f9fa,stroke:#dee2e6,color:#212529
-    style PIPELINE fill:#f8f9fa,stroke:#dee2e6,color:#212529
-    style A fill:#fff,stroke:#adb5bd,color:#495057
-    style B fill:#fff,stroke:#adb5bd,color:#343a40
-    style C fill:#fff,stroke:#6c757d,color:#343a40
-    style D fill:#fff,stroke:#adb5bd,color:#343a40
-    style E fill:#fff,stroke:#6c757d,color:#343a40
-    style F fill:#fff,stroke:#adb5bd,color:#343a40
-    style G fill:#fffbf0,stroke:#e9c46a,color:#343a40
-    style H fill:#fff,stroke:#e9c46a,color:#343a40
-    style I fill:#fff,stroke:#adb5bd,color:#343a40
-    style J fill:#fff,stroke:#6c757d,color:#343a40
 ```
 
 <details>
