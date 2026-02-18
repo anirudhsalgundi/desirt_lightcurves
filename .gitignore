@@ -23,3 +23,11 @@ logs/*err
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 *ipynb
+
+# desirt pipeline outputs
+results/databases/*
+results/plots/*
+results/summaries/*
+!results/**/.gitkeep
+logs/*
+!logs/.gitkeep

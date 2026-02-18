@@ -295,13 +295,13 @@ template_content = """
 <body>
     <div class="container">
         <header>
-            <h1>🔭 DESIRT Survey Results</h1>
+            <h1>DESIRT Survey Results</h1>
             <p>Lightcurves and Cutout Images Analysis</p>
         </header>
 
         <div class="controls">
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="🔍 Search by RA, DEC, DESIRT ID, or ZTF ID...">
+                <input type="text" id="searchInput" placeholder="Search by RA, DEC, DESIRT ID, or ZTF ID...">
             </div>
             <div class="stats">
                 <span>Total Objects: <strong id="totalCount">{{ data|length }}</strong></span>
@@ -330,15 +330,15 @@ template_content = """
                         <td class="images-cell">
                             <div class="image-grid">
                                 <div class="image-item">
-                                    <div class="image-label">📈 Lightcurve</div>
+                                    <div class="image-label">Lightcurve</div>
                                     <img src="{{ entry.lightcurve }}" alt="Lightcurve" onclick="openModal(this.src)">
                                 </div>
                                 <div class="image-item">
-                                    <div class="image-label">🌟 ZTF Cutout</div>
+                                    <div class="image-label">ZTF Cutout</div>
                                     <img src="{{ entry.ztf_cutout }}" alt="ZTF Cutout" onclick="openModal(this.src)">
                                 </div>
                                 <div class="image-item">
-                                    <div class="image-label">🔬 DESIRT Cutout</div>
+                                    <div class="image-label">DESIRT Cutout</div>
                                     <img src="{{ entry.desirt_cutout }}" alt="DESIRT Cutout" onclick="openModal(this.src)">
                                 </div>
                             </div>
@@ -480,6 +480,6 @@ output_path = "summary.html"
 with open(output_path, "w") as f:
     f.write(output_html)
 
-print(f"✓ Modern HTML summary generated: {output_path}")
+print(f"HTML summary generated: {output_path}")
 print(f"  - Total objects: {len(data)}")
 print(f"  - Features: Search, Sort, Full-screen images, Responsive design")
