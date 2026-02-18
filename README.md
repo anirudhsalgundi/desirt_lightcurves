@@ -1,81 +1,38 @@
 ```mermaid
 flowchart TD
-    %% Node Definitions
-    Raw([📦 DECam Raw Data]):::input
-    Setup[00_organize_data.py]:::script
-    DB1[(desirt_database.h5)]:::database
-    
-    Cross[01_crossmatch_ztf.py]:::script
-    DB2[(master_database.h5)]:::database
-    
-    Plot[02_plot_lightcurves.py]:::script
-    Filter[03_filter_candidates.py]:::filter
-    DB3[(candidate_subset.h5)]:::database
-    
-    Report[04_create_summary.py]:::script
-    Final([🌐 summary.html]):::output
+    A([DECam FITS Files / CSVs]) --> B
 
-    %% Flow
-    Raw --> Setup
-    Setup --> DB1
-    
-    subgraph Pipeline [Main Processing Pipeline]
-        direction TB
-        DB1 --> Cross
-        Cross --> DB2
-        DB2 --> Plot
-        DB2 --> Filter
-        Filter --> DB3
+    subgraph SETUP ["⬡  Stage 0 · One-time Setup"]
+        B["00_organize_data.py\nOrganise raw DECam data"]
     end
 
-    Plot --> Report
-    DB3 --> Report
-    Report --> Final
+    B --> C[(desirt_database.h5)]
 
-    %% Aesthetic Styling
-    classDef script fill:#f9f9f9,stroke:#333,stroke-width:1px,color:#333
-    classDef database fill:#e1f5fe,stroke:#01579b,stroke-width:1px,color:#01579b
-    classDef filter fill:#fff3e0,stroke:#e65100,stroke-width:1px,color:#e65100
-    classDef input fill:#eceff1,stroke:#455a64,stroke-width:2px
-    classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,stroke-dasharray: 5 5
-    
-    style Pipeline fill:#fcfcfc,stroke:#ddd,stroke-dasharray: 5 5,color:#999
-```
-
-```mermaid
-flowchart TD
-    A([📦 DECam FITS Files / CSVs]) --> B
-
-    subgraph SETUP ["Stage 0 — One-time Setup"]
-        B["00_organize_data.py | Organise raw DECam data into structured format"]
-    end
-
-    B --> C[(desirt_database.h5\nra, dec, mjds, filters\nmag_fphot, mag_alt\nscience/diff/template images)]
-
-    subgraph PIPELINE ["Main Pipeline"]
-        C --> D["01_crossmatch_ztf.py | Cross-match sources against ZTF alerts"]
+    subgraph PIPELINE ["⬡  Pipeline · Stages 1 – 4"]
+        C --> D["01_crossmatch_ztf.py\nCross-match against ZTF alerts"]
         D --> E[(master_database.h5)]
-        E --> F["02_plot_lightcurves.py | Generate lightcurve and cutout plots"]
-        E --> G["03_filter_candidates.py | Filter sources by science criteria ⚙️"]
+        E --> F["02_plot_lightcurves.py\nLightcurve & cutout plots"]
+        E --> G["03_filter_candidates.py\nFilter by science criteria"]
         G --> H[(candidate_subset.h5)]
-        F --> I["04_create_summary.py | Aggregate results into HTML summary report"]
+        F --> I["04_create_summary.py\nHTML summary report"]
         H --> I
     end
 
-    I --> J([🌐 summary.html])
+    I --> J([summary.html])
 
-    style SETUP fill:#1e1e2e,stroke:#6c7086,color:#cdd6f4
-    style PIPELINE fill:#1e1e2e,stroke:#6c7086,color:#cdd6f4
-    style A fill:#313244,stroke:#89b4fa,color:#cdd6f4
-    style J fill:#313244,stroke:#a6e3a1,color:#cdd6f4
-    style C fill:#313244,stroke:#f38ba8,color:#cdd6f4
-    style E fill:#313244,stroke:#f38ba8,color:#cdd6f4
-    style H fill:#313244,stroke:#fab387,color:#cdd6f4
-    style G fill:#45475a,stroke:#fab387,color:#fab387
+    style SETUP fill:#f8f9fa,stroke:#dee2e6,color:#212529
+    style PIPELINE fill:#f8f9fa,stroke:#dee2e6,color:#212529
+    style A fill:#fff,stroke:#adb5bd,color:#495057
+    style B fill:#fff,stroke:#adb5bd,color:#343a40
+    style C fill:#fff,stroke:#6c757d,color:#343a40
+    style D fill:#fff,stroke:#adb5bd,color:#343a40
+    style E fill:#fff,stroke:#6c757d,color:#343a40
+    style F fill:#fff,stroke:#adb5bd,color:#343a40
+    style G fill:#fffbf0,stroke:#e9c46a,color:#343a40
+    style H fill:#fff,stroke:#e9c46a,color:#343a40
+    style I fill:#fff,stroke:#adb5bd,color:#343a40
+    style J fill:#fff,stroke:#6c757d,color:#343a40
 ```
-
-
-
 
 <details>
 <summary> HDF5 Database Schema</summary>
