@@ -5,6 +5,7 @@
 <details>
 <summary> HDF5 Database Schema</summary>
 A sample HDF5 file structure for a single source in the DESIRT master database is shown below. Each source is stored as a group named by its coordinates (e.g., `/A202502031447311m004707`), containing attributes for RA and Dec, and datasets for lightcurve data and image cutouts.
+
 ```bash
 [salgundi@bridges2-login014 results]$ h5dump -A -g /A202502031447311m004707 desirt_master_database_20260217_184644.h5
 HDF5 "desirt_master_database_20260217_184644.h5" {
