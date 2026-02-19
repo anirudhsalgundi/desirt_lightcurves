@@ -137,7 +137,7 @@ def create_html_summary(data: list, output_dir: str) -> str:
     template_dir = Path("./templates")
     template_dir.mkdir(exist_ok=True)
     
-    # Modern, clean, professional HTML template
+    # Modern, clean, professional HTML template with 2-column layout
     template_content = """
 <!DOCTYPE html>
 <html lang="en">
@@ -232,8 +232,18 @@ def create_html_summary(data: list, output_dir: str) -> str:
         
         td {
             padding: 20px 15px;
-            text-align: center;
             border-bottom: 1px solid #e9ecef;
+            vertical-align: top;
+        }
+        
+        td:first-child {
+            width: 30%;
+            text-align: left;
+        }
+        
+        td:last-child {
+            width: 70%;
+            text-align: center;
         }
         
         tbody tr {
@@ -246,13 +256,36 @@ def create_html_summary(data: list, output_dir: str) -> str:
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         
+        .details-container {
+            padding: 10px;
+        }
+        
+        .detail-row {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #495057;
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .detail-value {
+            font-family: 'Courier New', monospace;
+            color: #2a5298;
+            font-size: 1.05em;
+        }
+        
         .badge {
             display: inline-block;
-            padding: 6px 16px;
+            padding: 4px 12px;
             border-radius: 20px;
             font-size: 0.85em;
             font-weight: 600;
             letter-spacing: 0.5px;
+            margin-left: 8px;
         }
         
         .badge-yes {
@@ -267,23 +300,51 @@ def create_html_summary(data: list, output_dir: str) -> str:
             border: 1px solid #f5c6cb;
         }
         
+        .ztf-info {
+            margin-top: 10px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+        
+        .ztf-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #2a5298;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+        
+        .ztf-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
         .ztf-link {
             display: inline-block;
-            color: #667eea;
+            color: white;
             text-decoration: none;
-            font-weight: 600;
-            padding: 8px 16px;
-            border: 2px solid #667eea;
-            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.85em;
+            padding: 8px 14px;
+            border-radius: 6px;
             transition: all 0.3s ease;
-            margin: 2px;
+        }
+        
+        .ztf-link.source {
+            background: #667eea;
+        }
+        
+        .ztf-link.alerts {
+            background: #764ba2;
         }
         
         .ztf-link:hover {
-            background: #667eea;
-            color: white;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            opacity: 0.9;
         }
         
         .images-container {
@@ -320,18 +381,6 @@ def create_html_summary(data: list, output_dir: str) -> str:
             padding: 20px;
             font-size: 0.9em;
         }
-        
-        .object-id {
-            font-family: 'Courier New', monospace;
-            font-weight: 600;
-            color: #2a5298;
-        }
-        
-        .coord {
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            color: #495057;
-        }
     </style>
 </head>
 <body>
@@ -359,35 +408,49 @@ def create_html_summary(data: list, output_dir: str) -> str:
         <table>
             <thead>
                 <tr>
-                    <th>DECam Name</th>
-                    <th>RA</th>
-                    <th>Dec</th>
-                    <th>ZTF Crossmatch</th>
+                    <th>Candidate Info</th>
                     <th>Lightcurve & Cutouts</th>
                 </tr>
             </thead>
             <tbody>
                 {% for entry in data %}
                 <tr>
-                    <td><span class="object-id">{{ entry.desirt_id }}</span></td>
-                    <td><span class="coord">{{ entry.ra }}</span></td>
-                    <td><span class="coord">{{ entry.dec }}</span></td>
                     <td>
-                        {% if entry.has_ztf %}
-                        <span class="badge badge-yes">YES</span>
-                        <div style="margin-top: 8px;">
-                            {% for ztf_id in entry.ztf_ids %}
-                            <a href="https://fritz.science/source/{{ ztf_id }}" 
-                               class="ztf-link" 
-                               target="_blank"
-                               title="View {{ ztf_id }} on Fritz">
-                                {{ ztf_id }}
-                            </a>
-                            {% endfor %}
+                        <div class="details-container">
+                            <div class="detail-row">
+                                <span class="detail-label">DECam Object ID:</span>
+                                <span class="detail-value">{{ entry.desirt_id }}</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Coordinates [RA, Dec]:</span>
+                                <span class="detail-value">({{ entry.ra }}, {{ entry.dec }})</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">ZTF Crossmatch:</span>
+                                {% if entry.has_ztf %}
+                                <span class="badge badge-yes">YES</span>
+                                {% for ztf_id in entry.ztf_ids %}
+                                <div class="ztf-info">
+                                    <div class="ztf-name">{{ ztf_id }}</div>
+                                    <div class="ztf-links">
+                                        <a href="https://fritz.science/source/{{ ztf_id }}" 
+                                           class="ztf-link source" 
+                                           target="_blank">
+                                            Fritz Source Page
+                                        </a>
+                                        <a href="https://fritz.science/alerts/ztf/{{ ztf_id }}" 
+                                           class="ztf-link alerts" 
+                                           target="_blank">
+                                            Fritz Alerts Page
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% else %}
+                                <span class="badge badge-no">NO</span>
+                                {% endif %}
+                            </div>
                         </div>
-                        {% else %}
-                        <span class="badge badge-no">NO</span>
-                        {% endif %}
                     </td>
                     <td>
                         <div class="images-container">
