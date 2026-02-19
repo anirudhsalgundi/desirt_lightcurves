@@ -77,18 +77,28 @@ def create_output_directories(base_dir: str):
     return lc_dir, cutout_dir
 
 
+def _safe_read_dataset(dataset):
+    """Safely read an HDF5 dataset, handling both scalar and array datasets."""
+    if dataset.shape == ():
+        # Scalar dataset - use [()] to read
+        return dataset[()]
+    else:
+        # Array dataset - use [:] to read
+        return dataset[:]
+
+
 def extract_desirt_data(obj_group):
     """Extract DESIRT photometry data from HDF5 group."""
     data = {
-        'mjds': obj_group['mjds'][:] if 'mjds' in obj_group else None,
-        'filters': obj_group['filters'][:] if 'filters' in obj_group else None,
-        'mag_alt': obj_group['mag_alt'][:] if 'mag_alt' in obj_group else None,
-        'magerr_alt': obj_group['magerr_alt'][:] if 'magerr_alt' in obj_group else None,
-        'mag_fphot': obj_group['mag_fphot'][:] if 'mag_fphot' in obj_group else None,
-        'magerr_fphot': obj_group['magerr_fphot'][:] if 'magerr_fphot' in obj_group else None,
-        'science_image': obj_group['science_image'][:] if 'science_image' in obj_group else None,
-        'template_image': obj_group['template_image'][:] if 'template_image' in obj_group else None,
-        'difference_image': obj_group['difference_image'][:] if 'difference_image' in obj_group else None,
+        'mjds': _safe_read_dataset(obj_group['mjds']) if 'mjds' in obj_group else None,
+        'filters': _safe_read_dataset(obj_group['filters']) if 'filters' in obj_group else None,
+        'mag_alt': _safe_read_dataset(obj_group['mag_alt']) if 'mag_alt' in obj_group else None,
+        'magerr_alt': _safe_read_dataset(obj_group['magerr_alt']) if 'magerr_alt' in obj_group else None,
+        'mag_fphot': _safe_read_dataset(obj_group['mag_fphot']) if 'mag_fphot' in obj_group else None,
+        'magerr_fphot': _safe_read_dataset(obj_group['magerr_fphot']) if 'magerr_fphot' in obj_group else None,
+        'science_image': _safe_read_dataset(obj_group['science_image']) if 'science_image' in obj_group else None,
+        'template_image': _safe_read_dataset(obj_group['template_image']) if 'template_image' in obj_group else None,
+        'difference_image': _safe_read_dataset(obj_group['difference_image']) if 'difference_image' in obj_group else None,
     }
     return data
 
@@ -96,13 +106,13 @@ def extract_desirt_data(obj_group):
 def extract_ztf_data(ztf_group):
     """Extract ZTF photometry data from a single ZTF object group."""
     data = {
-        'mjd': ztf_group['ztf_mjd'][:],
-        'mag': ztf_group['ztf_mag'][:],
-        'magerr': ztf_group['ztf_magerr'][:],
-        'fid': ztf_group['ztf_fid'][:],
-        'science_image': ztf_group['science_image'][:] if 'science_image' in ztf_group else None,
-        'template_image': ztf_group['template_image'][:] if 'template_image' in ztf_group else None,
-        'difference_image': ztf_group['difference_image'][:] if 'difference_image' in ztf_group else None,
+        'mjd': _safe_read_dataset(ztf_group['ztf_mjd']),
+        'mag': _safe_read_dataset(ztf_group['ztf_mag']),
+        'magerr': _safe_read_dataset(ztf_group['ztf_magerr']),
+        'fid': _safe_read_dataset(ztf_group['ztf_fid']),
+        'science_image': _safe_read_dataset(ztf_group['science_image']) if 'science_image' in ztf_group else None,
+        'template_image': _safe_read_dataset(ztf_group['template_image']) if 'template_image' in ztf_group else None,
+        'difference_image': _safe_read_dataset(ztf_group['difference_image']) if 'difference_image' in ztf_group else None,
     }
     return data
 
@@ -167,10 +177,10 @@ def plot_lightcurve(objid, desirt_data, ztf_data_list, output_path):
         mjds = desirt_data['mjds']
         filters = desirt_data['filters']
         
-        # Decode filter names if they're bytes
+        # Decode filter names if they're bytes and keep as numpy array
         if filters is not None and len(filters) > 0:
             if isinstance(filters[0], bytes):
-                filters = [f.decode('utf-8') for f in filters]
+                filters = np.array([f.decode('utf-8') for f in filters])
         
         # Plot mag_alt (decam)
         if desirt_data['mag_alt'] is not None:
