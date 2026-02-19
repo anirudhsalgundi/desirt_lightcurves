@@ -11,23 +11,39 @@ wheels/
 .venv
 
 uv.lock
-*log
-data/*txt
-
-
-slurm*out
-results/*h5
-logs/*out
-logs/*err
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
-*ipynb
+*.ipynb
 
-# desirt pipeline outputs
-results/databases/*
-results/plots/*
-results/summaries/*
-!results/**/.gitkeep
-logs/*
+# SLURM outputs
+slurm*out
+
+# Data files
+data/*.txt
+
+# Logs - ignore all log files but keep folders
+logs/*.log
+logs/*.out
+logs/*.err
+src/logs/*.log
+src/logs/*.out
+src/logs/*.err
+
+# Generated templates in src (keep main templates folder)
+src/templates/
+
+# Results - ignore generated files but keep folder structure
+results/databases/*.h5
+results/plots/**/*.png
+results/summaries/*.html
+results/test_run/
+!results/test_run/.gitkeep
+
+# Keep folder structure with .gitkeep
 !logs/.gitkeep
+!results/.gitkeep
+!results/**/.gitkeep
+
+# Keep templates
+!templates/summary_template.html
