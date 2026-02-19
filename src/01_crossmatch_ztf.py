@@ -293,17 +293,26 @@ def add_ztf_alerts_to_master_database(desirt_database, crossmatched_alerts, sear
             if 'cutoutScience' in most_recent_alert:
                 cutout = most_recent_alert['cutoutScience']
                 if isinstance(cutout, dict) and 'stampData' in cutout:
-                    ztf_obj_group.create_dataset('science_image', data=cutout['stampData'], compression='gzip')
+                    stamp = cutout['stampData']
+                    if isinstance(stamp, bytes):
+                        stamp = np.void(stamp)
+                    ztf_obj_group.create_dataset('science_image', data=stamp)
                     
             if 'cutoutTemplate' in most_recent_alert:
                 cutout = most_recent_alert['cutoutTemplate']
                 if isinstance(cutout, dict) and 'stampData' in cutout:
-                    ztf_obj_group.create_dataset('template_image', data=cutout['stampData'], compression='gzip')
+                    stamp = cutout['stampData']
+                    if isinstance(stamp, bytes):
+                        stamp = np.void(stamp)
+                    ztf_obj_group.create_dataset('template_image', data=stamp)
                     
             if 'cutoutDifference' in most_recent_alert:
                 cutout = most_recent_alert['cutoutDifference']
                 if isinstance(cutout, dict) and 'stampData' in cutout:
-                    ztf_obj_group.create_dataset('difference_image', data=cutout['stampData'], compression='gzip')
+                    stamp = cutout['stampData']
+                    if isinstance(stamp, bytes):
+                        stamp = np.void(stamp)
+                    ztf_obj_group.create_dataset('difference_image', data=stamp)
             
             stats['total_ztf_alerts_added'] += len(alerts_for_object)
         
