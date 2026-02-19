@@ -362,8 +362,7 @@ def create_html_summary(data: list, output_dir: str) -> str:
                     <th>DECam Name</th>
                     <th>RA</th>
                     <th>Dec</th>
-                    <th>ZTF Match</th>
-                    <th>ZTF ID</th>
+                    <th>ZTF Crossmatch</th>
                     <th>Lightcurve & Cutouts</th>
                 </tr>
             </thead>
@@ -376,12 +375,7 @@ def create_html_summary(data: list, output_dir: str) -> str:
                     <td>
                         {% if entry.has_ztf %}
                         <span class="badge badge-yes">YES</span>
-                        {% else %}
-                        <span class="badge badge-no">NO</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if entry.ztf_ids %}
+                        <div style="margin-top: 8px;">
                             {% for ztf_id in entry.ztf_ids %}
                             <a href="https://fritz.science/source/{{ ztf_id }}" 
                                class="ztf-link" 
@@ -390,8 +384,9 @@ def create_html_summary(data: list, output_dir: str) -> str:
                                 {{ ztf_id }}
                             </a>
                             {% endfor %}
+                        </div>
                         {% else %}
-                        <span class="no-image">—</span>
+                        <span class="badge badge-no">NO</span>
                         {% endif %}
                     </td>
                     <td>
