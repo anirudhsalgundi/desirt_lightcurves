@@ -141,19 +141,21 @@ def read_coords_from_database(db_path: str) -> list:
 
 
 # ===================================================================
-# Step 2  – Crossmatch with ZTF (early-stop after n_random matches)
+# Step 2  – Crossmatch with ZTF (early-stop after n_random matches with >= 50 alerts)
 # ===================================================================
+MIN_ZTF_ALERTS = 50
+
 def crossmatch_with_ztf(coords, kowalski_creds, projections_path, search_radius, n_needed):
     """
     Authenticate with Kowalski and crossmatch coords with ZTF,
-    stopping as soon as n_needed matches are found.
+    stopping as soon as n_needed matches with at least MIN_ZTF_ALERTS alerts are found.
 
     Parameters
     ----------
     coords : list
         List of (object_id, ra, dec) tuples.
     n_needed : int
-        Stop after collecting this many matched objects.
+        Stop after collecting this many matched objects (each with >= 50 ZTF alerts).
 
     Returns
     -------
@@ -172,21 +174,25 @@ def crossmatch_with_ztf(coords, kowalski_creds, projections_path, search_radius,
     random.shuffle(shuffled)
 
     crossmatched = {}
+    queried_count = 0
     for objid, ra, dec in tqdm(shuffled, desc="Crossmatching ZTF alerts"):
+        queried_count += 1
         alerts = crossmatch_mod._query_kowalski(
             ra, dec, search_radius, projections, kowalski_instance
         )
-        if alerts:
+        if alerts and len(alerts) >= MIN_ZTF_ALERTS:
             crossmatched[objid] = alerts
             logger.info(f"Found {len(alerts)} ZTF alerts for {objid} "
-                        f"({len(crossmatched)}/{n_needed} matches)")
+                        f"({len(crossmatched)}/{n_needed} matches with >= {MIN_ZTF_ALERTS} alerts)")
             if len(crossmatched) >= n_needed:
-                logger.info(f"Reached {n_needed} matches – stopping early")
+                logger.info(f"Reached {n_needed} matches with >= {MIN_ZTF_ALERTS} alerts – stopping early")
                 break
+        elif alerts:
+            logger.debug(f"Skipping {objid}: only {len(alerts)} ZTF alerts (need >= {MIN_ZTF_ALERTS})")
 
     logger.info(
-        f"Crossmatch done: {len(crossmatched)} matches found "
-        f"(queried {min(len(shuffled), shuffled.index((objid, ra, dec)) + 1) if crossmatched else len(shuffled)} of {len(shuffled)} objects)"
+        f"Crossmatch done: {len(crossmatched)} matches found with >= {MIN_ZTF_ALERTS} alerts "
+        f"(queried {queried_count} of {len(shuffled)} objects)"
     )
     return crossmatched
 
