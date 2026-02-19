@@ -40,6 +40,9 @@ results/summaries/*.html
 results/test_run/
 !results/test_run/.gitkeep
 
+#exports
+exports/*
+
 # Keep folder structure with .gitkeep
 !logs/.gitkeep
 !results/.gitkeep
