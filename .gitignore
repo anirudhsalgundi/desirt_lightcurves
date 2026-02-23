@@ -18,6 +18,7 @@ uv.lock
 
 # SLURM outputs
 slurm*out
+slurm_status.txt
 
 # Data files
 data/*.txt
