@@ -1,1 +1,1 @@
-sbatch --output=../slurm_status.txt submit_slurmjob.sh
+sbatch submit_slurmjob.sh
