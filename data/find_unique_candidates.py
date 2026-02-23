@@ -94,7 +94,7 @@ def get_latest_file_paths(db: dict) -> list:
         sorted_file_paths = sorted(file_paths)
 
         # update the file paths with the latest one, one with max detections
-        tqdm.write(f"Finding the latest file path for candidate {candidate} with {len(file_paths)} file paths")
+        tqdm.write(f"Finding the latest file path for candidate {candidate} with {len(temp)} file paths")
         updated_file_paths.append(sorted_file_paths[-1])
 
 
