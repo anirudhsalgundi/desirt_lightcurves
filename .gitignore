@@ -22,6 +22,7 @@ slurm_status.txt
 
 # Data files
 data/*.txt
+temp*
 
 # Logs - ignore all log files but keep folders
 logs/*.log
