@@ -30,7 +30,7 @@ INFER_SCHEMA_LENGTH = 10000
 REQUIRED_FITS_COLS = ['MJD_OBS', 'FILTER', 'MAG_ALT', 'MAGERR_ALT', 'MAG_FPHOT', 'MAGERR_FPHOT']
 
 # Create logs directory
-LOGSDIR = Path("./logs")
+LOGSDIR = Path("../logs")
 LOGSDIR.mkdir(exist_ok=True)
 
 log_filename = LOGSDIR / f"log_from_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -241,7 +241,7 @@ def main():
     logger.info("="*60)
     logger.info("\n[STEP 1/2] Reading FITS files to temporary storage...")
     logger.info("="*60)
-    temp_file = "./temp_fits_data.h5"
+    temp_file = "../temp_fits_data.h5"
     read_all_fits_files_to_temp(args.data, temp_file=temp_file, batch_size = args.batch_size, n_workers=args.n_workers)
     
     # Step 2: Load, sort, and save to final database
@@ -251,7 +251,7 @@ def main():
     
     # Create output file
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_file = f'./results/desirt_master_database_{timestamp}.h5'
+    output_file = f'../results/desirt_master_database_{timestamp}.h5'
     Path("./results").mkdir(exist_ok=True)
     
     # Read from temp and write to final (with sorting)
