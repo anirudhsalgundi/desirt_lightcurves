@@ -9,10 +9,10 @@
 
 cd /ocean/projects/phy250012p/salgundi/desirt_lightcurves
 source .venv/bin/activate
+cd src
+mkdir -p ../logs ../results
 
-mkdir -p logs results
-
-time uv run organize_desirt_data.py \
+time uv run 00_organize_data.py \
     --data /ocean/projects/phy250012p/salgundi/desirt_lightcurves/data/latest_file_paths.txt \
     --n_workers 64 \
     --batch_size 1000 \
