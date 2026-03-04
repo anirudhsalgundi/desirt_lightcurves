@@ -100,7 +100,7 @@ def extract_desirt_data(obj_group):
         'template_image': _safe_read_dataset(obj_group['template_image']) if 'template_image' in obj_group else None,
         'difference_image': _safe_read_dataset(obj_group['difference_image']) if 'difference_image' in obj_group else None,
     }
-    return data
+    return data #[0:100] #FIXME - temporary fix to avoid memory issues with cutouts, should be removed once we have a better solution for handling large cutouts in memory
 
 
 def extract_ztf_data(ztf_group):
@@ -226,7 +226,7 @@ def plot_lightcurve(objid, desirt_data, ztf_data_list, output_path):
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    logger.info(f"Saved lightcurve: {output_path}")
+    # logger.info(f"Saved lightcurve: {output_path}")
 
 
 def plot_cutouts_ztf(ztf_data_list, objid, output_path):
@@ -303,7 +303,7 @@ def plot_cutouts_ztf(ztf_data_list, objid, output_path):
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    logger.info(f"Saved ZTF cutouts: {output_path}")
+    # logger.info(f"Saved ZTF cutouts: {output_path}")
 
 
 def plot_cutouts_desirt(desirt_data, objid, output_path):
@@ -365,7 +365,7 @@ def plot_cutouts_desirt(desirt_data, objid, output_path):
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     plt.close()
     
-    logger.info(f"Saved DESIRT cutouts: {output_path}")
+    # logger.info(f"Saved DESIRT cutouts: {output_path}")
 
 
 def process_object(objid, obj_group, lc_dir, cutout_dir):
@@ -432,7 +432,7 @@ def main():
         objids = [args.objid]
         logger.info(f"Plotting single object: {args.objid}")
     elif args.plot_all:
-        objids = list(db.keys())
+        objids = list(db.keys()) #[0:100] #FIXME - temporary fix to avoid memory issues with plotting all objects, should be removed once we have a better solution for handling large number of objects in memory
         logger.info(f"Plotting all {len(objids)} objects in database")
     else:
         logger.error("Must specify either --objid or --plot_all")
@@ -445,7 +445,7 @@ def main():
             obj_group = db[objid]
             process_object(objid, obj_group, lc_dir, cutout_dir)
         except Exception as e:
-            logger.error(f"Error processing {objid}: {e}")
+            tqdm.write(f"Error processing {objid}: {e}")
             continue
     
     db.close()
