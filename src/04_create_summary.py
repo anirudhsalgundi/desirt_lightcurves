@@ -56,7 +56,7 @@ def extract_data_from_database(db_path: str, plots_dir: str) -> list:
     """
     Extract data from HDF5 database for HTML summary.
     
-    Parameters:
+    Parameters:--ou
     - db_path: Path to HDF5 database
     - plots_dir: Base directory containing plots
     
@@ -115,7 +115,7 @@ def extract_data_from_database(db_path: str, plots_dir: str) -> list:
             data.append(entry)
     
     logger.info(f"Extracted data for {len(data)} objects")
-    return data
+    return data #[:100]  # Limit to first 100 objects for summary (can be removed later)
 
 
 def create_html_summary(data: list, output_dir: str) -> str:
