@@ -37,10 +37,11 @@ src/templates/
 
 # Results - ignore generated files but keep folder structure
 results/databases/*.h5
-results/plots/**/*.png
+results/plots/**/*
 results/summaries/*.html
 results/test_run/
 !results/test_run/.gitkeep
+src/results/plots/**/*
 
 #exports
 exports/*
@@ -52,3 +53,6 @@ exports/*
 
 # Keep templates
 !templates/summary_template.html
+
+results/**/*json
+src/results/**/*html
