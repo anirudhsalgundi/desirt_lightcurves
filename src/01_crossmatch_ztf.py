@@ -72,7 +72,7 @@ def get_coords(desirt_database) -> list:
     logger.info(f"Extracted {len(coords)} coordinates from DESIRT database")
     return coords
 
-def get_kowalski_instance(kowalski_creds, projections) -> Kowalski:
+def get_kowalski_instance(kowalski_creds, projections) -> Kowalski: #FIXME needs BOOM integration
     """
     Get an authenticated Kowalski instance.
 
@@ -160,9 +160,28 @@ def crossmatch_ztf_alerts(coords, radius, projections, kowalski_instance) -> dic
     for objid, ra, dec in tqdm(coords, desc="Crossmatching ZTF alerts"):
         alerts = _query_kowalski(ra, dec, radius, projections, kowalski_instance)
         
-        if alerts:
-            crossmatched_alerts[objid] = alerts
-            logger.info(f"Found {len(alerts)} ZTF alerts for {objid}")
+        # if alerts:
+        #     crossmatched_alerts[objid] = alerts
+        #     logger.info(f"Found {len(alerts)} ZTF alerts for {objid}")
+
+
+        if len(alerts) > 1:
+            separations = []
+            for alert in alerts:
+                logger.info(f"Multiple ZTF alerts found for {objid} (RA: {ra}, Dec: {dec}) - {len(alerts)} alerts")
+                candidate = alert.get('candidate', {})
+                ztf_ra, ztf_dec = candidate.get('ra'), candidate.get('dec')
+
+                separation = SkyCoord(ra=ra*u.degree, dec=dec*u.degree).separation(SkyCoord(ra=ztf_ra*u.degree, dec=ztf_dec*u.degree)).arcsecond
+                separations.append(separation)
+
+            min_separation_idx = np.argmin(separations)
+
+            closest_alert = alerts[min_separation_idx]
+            crossmatched_alerts[objid] = [closest_alert]
+
+            
+
 
     logger.info(f"Total DESIRT objects with ZTF matches: {len(crossmatched_alerts)}")
     return crossmatched_alerts

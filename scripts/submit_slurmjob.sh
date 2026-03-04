@@ -1,9 +1,10 @@
 #!/bin/bash
 #SBATCH -J desirt_full_run
 #SBATCH -p RM
-#SBATCH --ntasks-per-node=64
-#SBATCH --mem=120G
+#SBATCH --ntasks-per-node=128
+#SBATCH --mem=220G
 #SBATCH -A phy250012p
+#SBATCH -t 48:00:00
 #SBATCH -o ../logs/desirt_full_%j.out
 #SBATCH -e ../logs/desirt_full_%j.err
 

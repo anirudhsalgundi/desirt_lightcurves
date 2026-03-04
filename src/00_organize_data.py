@@ -251,7 +251,7 @@ def main():
     
     # Create output file
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_file = f'../results/desirt_master_database_{timestamp}.h5'
+    output_file = f'../results/databases/desirt_master_database_{timestamp}.h5'
     Path("./results").mkdir(exist_ok=True)
     
     # Read from temp and write to final (with sorting)
