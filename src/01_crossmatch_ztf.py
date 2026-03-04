@@ -48,7 +48,7 @@ def argument_parser() -> argparse.Namespace:
     parser.add_argument("--desirt_database", type=str, required=True, help="Path to the DESIRT master database (HDF5 file).")
     parser.add_argument("--kowalski_creds", type=str, default="../utils/kowalski_credentials.json", 
                    help="Path to the JSON file with Kowalski credentials (default: ../utils/kowalski_credentials.json).")
-    parser.add_argument("--projections", type=str, required=False, default = "", help="Path to the JSON file with needed projections.")
+    parser.add_argument("--projections", type=str, required=False, default = "../utils/ztf_alert_projections.json", help="Path to the JSON file with needed projections.")
     parser.add_argument("--search_radius", type=float, default=3.0, help="Search radius in arcseconds for crossmatching (default: 3 arcsec).")
     return parser.parse_args()
 
@@ -70,7 +70,7 @@ def get_coords(desirt_database) -> list:
         if ra is not None and dec is not None:
             coords.append((objid, ra, dec))
     logger.info(f"Extracted {len(coords)} coordinates from DESIRT database")
-    return coords
+    return coords #[0:500] #FIXME limit to 500 for testing, remove this line for full run
 
 def get_kowalski_instance(kowalski_creds, projections) -> Kowalski: #FIXME needs BOOM integration
     """
@@ -159,27 +159,49 @@ def crossmatch_ztf_alerts(coords, radius, projections, kowalski_instance) -> dic
 
     for objid, ra, dec in tqdm(coords, desc="Crossmatching ZTF alerts"):
         alerts = _query_kowalski(ra, dec, radius, projections, kowalski_instance)
-        
-        # if alerts:
-        #     crossmatched_alerts[objid] = alerts
-        #     logger.info(f"Found {len(alerts)} ZTF alerts for {objid}")
+
+        # No alerts found
+        if not alerts:
+            tqdm.write(f"[!!] {objid} has {len(alerts)} ZTF crossmatches within 5 arcsec, skipping")
+            continue
+            # continue
+
+        # Group all alerts by unique ZTF objectId
+        unique_ztf_objects = {}
+        for alert in alerts:
+            ztf_objid = alert.get('objectId')
+            if ztf_objid:
+                unique_ztf_objects.setdefault(ztf_objid, []).append(alert)
+
+        if len(unique_ztf_objects) == 1:
+            # Only one ZTF source — keep all its alerts
+            crossmatched_alerts[objid] = alerts
+            ztf_id = list(unique_ztf_objects.keys())[0]
+            tqdm.write(f"[=>] {objid} maps to {ztf_id} ({len(alerts)} alerts)")
 
 
-        if len(alerts) > 1:
-            separations = []
-            for alert in alerts:
-                logger.info(f"Multiple ZTF alerts found for {objid} (RA: {ra}, Dec: {dec}) - {len(alerts)} alerts")
-                candidate = alert.get('candidate', {})
-                ztf_ra, ztf_dec = candidate.get('ra'), candidate.get('dec')
+        elif len(unique_ztf_objects) > 1:
+            # Multiple ZTF sources — find the nearest one using median position per source
+            nearest_objid = None
+            min_sep = np.inf
 
-                separation = SkyCoord(ra=ra*u.degree, dec=dec*u.degree).separation(SkyCoord(ra=ztf_ra*u.degree, dec=ztf_dec*u.degree)).arcsecond
-                separations.append(separation)
+            for ztf_objid, ztf_alerts in unique_ztf_objects.items():
+                median_ra  = np.median([a['candidate']['ra']  for a in ztf_alerts])
+                median_dec = np.median([a['candidate']['dec'] for a in ztf_alerts])
+                sep = SkyCoord(ra=ra*u.degree, dec=dec*u.degree).separation(
+                    SkyCoord(ra=median_ra*u.degree, dec=median_dec*u.degree)
+                ).arcsecond
+                if sep < min_sep:
+                    min_sep = sep
+                    nearest_objid = ztf_objid
 
-            min_separation_idx = np.argmin(separations)
-
-            closest_alert = alerts[min_separation_idx]
-            crossmatched_alerts[objid] = [closest_alert]
-
+            # Keep ALL alerts from the nearest source
+            crossmatched_alerts[objid] = unique_ztf_objects[nearest_objid]
+            tqdm.write(
+                f"{objid}: {len(unique_ztf_objects)} ZTF sources found!! "
+                f"keping {nearest_objid} ({min_sep:.2f}\" from {objid}, "
+                f"{len(unique_ztf_objects[nearest_objid])} alerts)"
+            )
             
 
 
